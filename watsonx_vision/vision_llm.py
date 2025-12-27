@@ -1,0 +1,384 @@
+"""
+Vision LLM Module
+
+Provides a unified interface for vision-based document analysis using various LLM providers.
+Supports IBM Watsonx AI, local Ollama models, and other compatible providers.
+
+Extracted from IBM Watsonx Loan Preprocessing Agents project.
+"""
+
+import base64
+import mimetypes
+from typing import Dict, List, Optional, Union, Any
+from dataclasses import dataclass
+from enum import Enum
+
+try:
+    from langchain_ibm import ChatWatsonx
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.output_parsers import JsonOutputParser
+    WATSONX_AVAILABLE = True
+except ImportError:
+    WATSONX_AVAILABLE = False
+
+
+class LLMProvider(Enum):
+    """Supported LLM providers"""
+    WATSONX = "watsonx"
+    OLLAMA = "ollama"
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+
+
+@dataclass
+class VisionLLMConfig:
+    """Configuration for Vision LLM"""
+    provider: LLMProvider = LLMProvider.WATSONX
+    model_id: str = "meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
+    api_key: Optional[str] = None
+    url: Optional[str] = None
+    project_id: Optional[str] = None
+    max_tokens: int = 2000
+    temperature: float = 0.0
+    top_p: float = 0.1
+
+
+class VisionLLM:
+    """
+    Vision-based LLM for document analysis.
+
+    Supports multiple providers with a unified interface for:
+    - Document classification
+    - Information extraction
+    - Visual analysis
+    - OCR and text detection
+
+    Example:
+        >>> config = VisionLLMConfig(
+        ...     provider=LLMProvider.WATSONX,
+        ...     model_id="meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
+        ...     api_key="your-api-key",
+        ...     url="https://us-south.ml.cloud.ibm.com",
+        ...     project_id="your-project-id"
+        ... )
+        >>> llm = VisionLLM(config)
+        >>> result = llm.classify_document(image_base64)
+    """
+
+    def __init__(self, config: VisionLLMConfig):
+        """
+        Initialize Vision LLM with configuration.
+
+        Args:
+            config: VisionLLMConfig object with provider settings
+
+        Raises:
+            ImportError: If required packages for provider are not installed
+            ValueError: If configuration is invalid
+        """
+        self.config = config
+        self._llm = self._initialize_llm()
+        self._parser = JsonOutputParser()
+
+    def _initialize_llm(self):
+        """Initialize the LLM based on provider configuration"""
+        if self.config.provider == LLMProvider.WATSONX:
+            if not WATSONX_AVAILABLE:
+                raise ImportError(
+                    "langchain-ibm is required for Watsonx provider. "
+                    "Install with: pip install langchain-ibm"
+                )
+
+            return ChatWatsonx(
+                model_id=self.config.model_id,
+                apikey=self.config.api_key,
+                url=self.config.url,
+                project_id=self.config.project_id,
+                params={
+                    "max_new_tokens": self.config.max_tokens,
+                    "temperature": self.config.temperature,
+                    "top_p": self.config.top_p,
+                }
+            )
+
+        elif self.config.provider == LLMProvider.OLLAMA:
+            try:
+                from langchain_ollama import ChatOllama
+            except ImportError:
+                raise ImportError(
+                    "langchain-ollama is required for Ollama provider. "
+                    "Install with: pip install langchain-ollama"
+                )
+
+            return ChatOllama(
+                model=self.config.model_id,
+                base_url=self.config.url or "http://localhost:11434",
+                temperature=self.config.temperature,
+            )
+
+        else:
+            raise ValueError(f"Unsupported provider: {self.config.provider}")
+
+    def _create_vision_message(
+        self,
+        image_data: str,
+        prompt: str,
+        system_prompt: Optional[str] = None
+    ) -> List[Union[SystemMessage, HumanMessage]]:
+        """
+        Create messages for vision LLM with image and text.
+
+        Args:
+            image_data: Base64-encoded image data URI (data:image/png;base64,...)
+            prompt: User prompt/question about the image
+            system_prompt: Optional system prompt for context
+
+        Returns:
+            List of messages for LLM
+        """
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": image_data}}
+        ]
+
+        messages = []
+        if system_prompt:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=content))
+
+        return messages
+
+    def analyze_image(
+        self,
+        image_data: str,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        parse_json: bool = True
+    ) -> Union[Dict, str]:
+        """
+        Analyze an image with a custom prompt.
+
+        Args:
+            image_data: Base64-encoded image data URI
+            prompt: Analysis prompt
+            system_prompt: Optional system context
+            parse_json: Whether to parse response as JSON
+
+        Returns:
+            Parsed JSON dict if parse_json=True, else raw string
+        """
+        messages = self._create_vision_message(image_data, prompt, system_prompt)
+        response = self._llm.invoke(messages)
+
+        if parse_json:
+            return self._parser.parse(response.content)
+        return response.content
+
+    def classify_document(
+        self,
+        image_data: str,
+        document_types: Optional[List[str]] = None
+    ) -> Dict[str, str]:
+        """
+        Classify a document image into predefined types.
+
+        Args:
+            image_data: Base64-encoded image data URI
+            document_types: Optional list of expected document types
+                          (defaults to common financial documents)
+
+        Returns:
+            Dict with 'doc_type' key containing classification result
+
+        Example:
+            >>> result = llm.classify_document(image_base64)
+            >>> print(result['doc_type'])  # "Passport"
+        """
+        if document_types is None:
+            document_types = [
+                "Driving License",
+                "Passport",
+                "SSN (Social Security Number card)",
+                "Utility Bill",
+                "Salary Slip",
+                "ITR (Income Tax Return)",
+                "Bank Account Statement",
+                "Tax Return",
+                "Articles of Incorporation",
+                "Personal Financial Statement",
+                "Others"
+            ]
+
+        types_list = "\n    * ".join(document_types)
+
+        system_prompt = f"""You are a helpful document classification assistant. You will be given an image of a document. Your task is to carefully analyze the visual and textual content of the document to determine its type.
+
+The possible types are:
+    * {types_list}
+
+Based on the layout, text, and any visible clues, classify the document into one of these types.
+Return your answer strictly in the following JSON format (without any extra text):
+
+```json
+{{
+  "doc_type": "<document type>"
+}}
+```
+
+Replace `<document type>` with one of the above options exactly as written."""
+
+        return self.analyze_image(
+            image_data=image_data,
+            prompt="Classify this document",
+            system_prompt=system_prompt,
+            parse_json=True
+        )
+
+    def extract_information(
+        self,
+        image_data: str,
+        fields: Optional[List[str]] = None,
+        date_format: str = "YYYY-MM-DD"
+    ) -> Dict[str, Any]:
+        """
+        Extract structured information from a document image.
+
+        Args:
+            image_data: Base64-encoded image data URI
+            fields: Optional list of fields to extract
+                   (defaults to common PII fields)
+            date_format: Expected date format in output
+
+        Returns:
+            Dict with extracted fields
+
+        Example:
+            >>> result = llm.extract_information(image_base64)
+            >>> print(result['name'])  # "John Doe"
+        """
+        if fields is None:
+            fields = [
+                "Name", "Address", "Date of Birth (DOB)", "Gender",
+                "Document Number", "Nationality", "Issuing authority",
+                "Date of issue", "Expiry date", "SSN", "EIN",
+                "Revenue", "Expenses", "Net Income"
+            ]
+
+        fields_list = "\n ".join([f"- {field}" for field in fields])
+
+        system_prompt = f"""You are a highly skilled information extraction assistant.
+You will be given an image of a document. Your task is to carefully analyze the visual and textual content of the document and extract all available personal or business information.
+
+Specifically, extract details such as (if present):
+ {fields_list}
+
+All dates should be extracted in the format {date_format}.
+For document numbers, the json key should be respective to the document type (e.g., "passport_number", "driving_license_number", "ein", "ssn").
+Only include information explicitly present on the document. If a field is not found, omit it from the output.
+Return the extracted information strictly in a JSON format, for example:
+
+```json
+{{
+  "name": "John Doe",
+  "address": "123 Main Street, Springfield, IL, USA",
+  "dob": "1990-05-15",
+  "gender": "Male",
+  "document_number": "X1234567",
+  "nationality": "USA"
+}}
+```
+
+If any information is missing, do not include that key in the JSON.
+Provide only the JSON object as the output, with no additional text."""
+
+        return self.analyze_image(
+            image_data=image_data,
+            prompt="Extract personal or business information from this document",
+            system_prompt=system_prompt,
+            parse_json=True
+        )
+
+    def validate_authenticity(
+        self,
+        image_data: str
+    ) -> Dict[str, Any]:
+        """
+        Validate document authenticity using vision analysis.
+
+        Checks for:
+        - Layout consistency
+        - Field formatting
+        - Forgery signs (photo manipulation, text overlays, font mismatches)
+
+        Args:
+            image_data: Base64-encoded image data URI
+
+        Returns:
+            Dict with validation results including:
+            - valid (bool): Whether document appears authentic
+            - reason (str): Explanation
+            - layout_score (int): 0-100
+            - field_score (int): 0-100
+            - forgery_signs (List[str]): List of issues found
+
+        Example:
+            >>> result = llm.validate_authenticity(image_base64)
+            >>> if not result['valid']:
+            ...     print(f"Fraud detected: {result['reason']}")
+        """
+        system_prompt = """You are a document fraud detection expert. Analyze this document image for signs of forgery or manipulation.
+
+Check for:
+1. Layout consistency - Does the layout match standard government-issued or official documents?
+2. Field consistency - Are all fields properly formatted and aligned?
+3. Signs of forgery - Photo manipulation, text overlays, font mismatches, etc.
+4. Overall authenticity - Does this appear to be a genuine document?
+
+Return your analysis in JSON format:
+```json
+{
+  "valid": true/false,
+  "reason": "Brief explanation of why the document is valid or fake",
+  "layout_score": 0-100,
+  "field_score": 0-100,
+  "forgery_signs": ["list", "of", "issues"] or []
+}
+```"""
+
+        return self.analyze_image(
+            image_data=image_data,
+            prompt="Validate the authenticity of this document",
+            system_prompt=system_prompt,
+            parse_json=True
+        )
+
+    @staticmethod
+    def encode_image_to_base64(
+        image_path: str,
+        mime_type: Optional[str] = None
+    ) -> str:
+        """
+        Encode a local image file to base64 data URI.
+
+        Args:
+            image_path: Path to image file
+            mime_type: Optional MIME type (auto-detected if not provided)
+
+        Returns:
+            Base64-encoded data URI string
+
+        Example:
+            >>> data_uri = VisionLLM.encode_image_to_base64("document.png")
+            >>> result = llm.classify_document(data_uri)
+        """
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+
+        base64_encoded = base64.b64encode(image_bytes).decode("utf-8")
+
+        if mime_type is None:
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if mime_type is None:
+                mime_type = "image/png"
+
+        return f"data:{mime_type};base64,{base64_encoded}"

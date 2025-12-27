@@ -1,0 +1,28 @@
+"""
+Watsonx Vision Toolkit
+
+A reusable Python package for vision-based document analysis, fraud detection,
+and multi-document validation using IBM Watsonx AI or compatible LLM providers.
+
+Extracted from IBM Watsonx Loan Preprocessing Agents project.
+"""
+
+__version__ = "0.1.0"
+__author__ = "AIQSO - Quinn Vidal"
+__email__ = "quinn@aiqso.io"
+
+from .vision_llm import VisionLLM, VisionLLMConfig
+from .fraud_detector import FraudDetector, FraudResult
+from .cross_validator import CrossValidator, ValidationResult
+from .decision_engine import DecisionEngine, Decision
+
+__all__ = [
+    "VisionLLM",
+    "VisionLLMConfig",
+    "FraudDetector",
+    "FraudResult",
+    "CrossValidator",
+    "ValidationResult",
+    "DecisionEngine",
+    "Decision",
+]
