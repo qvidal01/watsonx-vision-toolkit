@@ -34,6 +34,7 @@ This directory contains practical examples demonstrating the key features of the
 | [cross_validation.py](cross_validation.py) | Validate consistency across multiple documents |
 | [retry_configuration.py](retry_configuration.py) | Configure retry behavior for resilient LLM calls |
 | [environment_config.py](environment_config.py) | Load configuration from environment variables |
+| [response_caching.py](response_caching.py) | Cache LLM responses to reduce API calls |
 | [complete_workflow.py](complete_workflow.py) | End-to-end loan application processing |
 
 ## Quick Start

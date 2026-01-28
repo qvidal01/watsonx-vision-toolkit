@@ -32,6 +32,11 @@ from .retry import (
     async_retry_with_backoff,
     async_retry_llm_call,
 )
+from .cache import (
+    CacheConfig,
+    ResponseCache,
+    CacheStats,
+)
 
 __all__ = [
     # Core classes
@@ -59,4 +64,8 @@ __all__ = [
     # Async retry utilities
     "async_retry_with_backoff",
     "async_retry_llm_call",
+    # Cache utilities
+    "CacheConfig",
+    "ResponseCache",
+    "CacheStats",
 ]
