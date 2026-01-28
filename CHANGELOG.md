@@ -8,9 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Custom Exception Hierarchy** - Structured error handling
+  - `WatsonxVisionError` - Base exception for all toolkit errors
+  - `LLMConnectionError` - Connection failures to LLM providers
+  - `LLMResponseError` - Invalid or unexpected LLM responses
+  - `LLMParseError` - JSON parsing failures
+  - `LLMTimeoutError` - Request timeout handling
+  - `DocumentAnalysisError` - Document analysis failures
+  - `ValidationError` - Cross-validation logic errors
+  - `ConfigurationError` - Invalid configuration detection
+- **Logging Infrastructure** - Structured logging throughout
+  - Debug-level logging for validation steps
+  - Error-level logging for failures with context
+  - Warning-level logging for type coercion
 - Comprehensive test suite for `cross_validator.py` (29 tests)
 - Comprehensive test suite for `vision_llm.py` (36 tests)
-- Test coverage increased from ~40% to ~85%
+- Test suite for `exceptions.py` (20 tests)
+- Test coverage increased from ~40% to ~90%
+- Comprehensive API reference documentation (`docs/API_REFERENCE.md`)
+
+### Changed
+- `VisionLLM.analyze_image()` now raises specific exceptions instead of generic errors
+- `CrossValidator._llm_validate()` includes comprehensive error handling
+- `FraudDetector.validate_document()` wraps errors in `DocumentAnalysisError`
 
 ### Fixed
 - Corrected severity calculation test assertions to match implementation behavior

@@ -15,8 +15,19 @@ from .vision_llm import VisionLLM, VisionLLMConfig
 from .fraud_detector import FraudDetector, FraudResult
 from .cross_validator import CrossValidator, ValidationResult
 from .decision_engine import DecisionEngine, Decision
+from .exceptions import (
+    WatsonxVisionError,
+    LLMConnectionError,
+    LLMResponseError,
+    LLMParseError,
+    LLMTimeoutError,
+    DocumentAnalysisError,
+    ValidationError,
+    ConfigurationError,
+)
 
 __all__ = [
+    # Core classes
     "VisionLLM",
     "VisionLLMConfig",
     "FraudDetector",
@@ -25,4 +36,13 @@ __all__ = [
     "ValidationResult",
     "DecisionEngine",
     "Decision",
+    # Exceptions
+    "WatsonxVisionError",
+    "LLMConnectionError",
+    "LLMResponseError",
+    "LLMParseError",
+    "LLMTimeoutError",
+    "DocumentAnalysisError",
+    "ValidationError",
+    "ConfigurationError",
 ]
