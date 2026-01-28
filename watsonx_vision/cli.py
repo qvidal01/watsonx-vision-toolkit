@@ -156,7 +156,7 @@ def get_version():
         return version("watsonx-vision-toolkit")
     except Exception:
         # Fallback for development
-        return "0.1.0-dev"
+        return "0.2.0-dev"
 
 
 @click.group()

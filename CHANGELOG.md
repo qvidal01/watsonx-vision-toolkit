@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-27
+
 ### Added
 - **Command-Line Interface (CLI)** - Full-featured CLI tool for document analysis
   - `watsonx-vision classify` - Classify documents into types
@@ -138,5 +140,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional dependencies for Watsonx (`langchain-ibm`) and Ollama (`langchain-ollama`)
 - Development tools: pytest, ruff, mypy, black
 
-[Unreleased]: https://github.com/qvidal01/watsonx-vision-toolkit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/qvidal01/watsonx-vision-toolkit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/qvidal01/watsonx-vision-toolkit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/qvidal01/watsonx-vision-toolkit/releases/tag/v0.1.0
