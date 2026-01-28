@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Async Support** - Full async/await API for concurrent operations
+  - `VisionLLM`: `analyze_image_async`, `classify_document_async`, `extract_information_async`, `validate_authenticity_async`
+  - `FraudDetector`: `validate_document_async`, `validate_batch_async` (with concurrent option)
+  - `CrossValidator`: `validate_async`, `validate_batch_async` (with concurrent option)
+  - `FinancialCrossValidator`: `validate_financials_async`
+  - Async retry utilities: `async_retry_with_backoff` decorator, `async_retry_llm_call` function
 - **Examples Directory** - Practical code samples
   - `basic_classification.py` - Document type classification
   - `information_extraction.py` - Extracting structured data with presets

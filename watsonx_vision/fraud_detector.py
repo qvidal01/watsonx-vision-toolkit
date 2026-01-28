@@ -3,10 +3,12 @@ Fraud Detection Module
 
 Provides document authenticity validation using vision-based analysis.
 Detects forgery, manipulation, and other fraud indicators.
+Supports both synchronous and asynchronous operations.
 
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
+import asyncio
 import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
@@ -230,6 +232,137 @@ class FraudDetector:
             results.append(result)
         return results
 
+    # ==================== Async Methods ====================
+
+    async def validate_document_async(
+        self,
+        image_data: str,
+        filename: Optional[str] = None,
+        document_type: Optional[str] = None
+    ) -> FraudResult:
+        """
+        Async version of validate_document.
+
+        Validate document authenticity asynchronously.
+
+        Args:
+            image_data: Base64-encoded image data URI
+            filename: Optional filename for result tracking
+            document_type: Optional document type hint
+
+        Returns:
+            FraudResult with validation details
+
+        Raises:
+            DocumentAnalysisError: If document analysis fails
+
+        Example:
+            >>> result = await detector.validate_document_async(image_base64, "passport.png")
+            >>> print(f"Valid: {result.valid}, Confidence: {result.confidence}%")
+        """
+        logger.debug(f"Validating document async: {filename or 'unnamed'}")
+
+        try:
+            raw_result = await self.llm.validate_authenticity_async(image_data)
+        except WatsonxVisionError as e:
+            logger.error(f"Vision analysis failed for {filename}: {e}")
+            raise DocumentAnalysisError(
+                f"Failed to analyze document: {filename or 'unnamed'}",
+                details={"original_error": str(e), "filename": filename}
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error during document validation: {e}")
+            raise DocumentAnalysisError(
+                f"Unexpected error analyzing document: {filename or 'unnamed'}",
+                details=str(e)
+            ) from e
+
+        # Extract scores with safe defaults
+        layout_score = raw_result.get("layout_score", 0)
+        field_score = raw_result.get("field_score", 0)
+        forgery_signs = raw_result.get("forgery_signs", [])
+        reason = raw_result.get("reason", "No reason provided")
+
+        # Validate score types
+        if not isinstance(layout_score, (int, float)):
+            logger.warning(f"Invalid layout_score type: {type(layout_score)}, defaulting to 0")
+            layout_score = 0
+        if not isinstance(field_score, (int, float)):
+            logger.warning(f"Invalid field_score type: {type(field_score)}, defaulting to 0")
+            field_score = 0
+
+        confidence = int((layout_score + field_score) / 2)
+
+        valid = (
+            raw_result.get("valid", False) and
+            layout_score >= self.layout_threshold and
+            field_score >= self.field_threshold and
+            confidence >= self.min_confidence
+        )
+
+        severity = self._calculate_severity(valid, confidence, len(forgery_signs))
+
+        logger.debug(f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}")
+
+        return FraudResult(
+            valid=valid,
+            confidence=confidence,
+            reason=reason,
+            layout_score=layout_score,
+            field_score=field_score,
+            forgery_signs=forgery_signs,
+            severity=severity,
+            filename=filename
+        )
+
+    async def validate_batch_async(
+        self,
+        documents: List[Dict[str, str]],
+        concurrent: bool = True
+    ) -> List[FraudResult]:
+        """
+        Async version of validate_batch.
+
+        Validate multiple documents asynchronously.
+
+        Args:
+            documents: List of dicts with 'image_data' and optional 'filename', 'doc_type'
+            concurrent: If True, validate all documents concurrently (default: True)
+
+        Returns:
+            List of FraudResult objects
+
+        Example:
+            >>> docs = [
+            ...     {"image_data": img1_base64, "filename": "passport.png"},
+            ...     {"image_data": img2_base64, "filename": "license.png"}
+            ... ]
+            >>> results = await detector.validate_batch_async(docs)
+            >>> invalid_count = sum(1 for r in results if not r.valid)
+        """
+        if concurrent:
+            # Run all validations concurrently
+            tasks = [
+                self.validate_document_async(
+                    image_data=doc["image_data"],
+                    filename=doc.get("filename"),
+                    document_type=doc.get("doc_type")
+                )
+                for doc in documents
+            ]
+            return await asyncio.gather(*tasks)
+        else:
+            # Run sequentially
+            results = []
+            for doc in documents:
+                result = await self.validate_document_async(
+                    image_data=doc["image_data"],
+                    filename=doc.get("filename"),
+                    document_type=doc.get("doc_type")
+                )
+                results.append(result)
+            return results
+
     def _calculate_severity(
         self,
         valid: bool,
@@ -407,6 +540,83 @@ class SpecializedFraudDetector(FraudDetector):
             ) from e
 
         # Convert to FraudResult with safe defaults
+        layout_score = result.get("layout_score", 0)
+        field_score = result.get("field_score", 0)
+        forgery_signs = result.get("forgery_signs", [])
+        confidence = int((layout_score + field_score) / 2)
+        valid = result.get("valid", False)
+        severity = self._calculate_severity(valid, confidence, len(forgery_signs))
+
+        return FraudResult(
+            valid=valid,
+            confidence=confidence,
+            reason=result.get("reason", ""),
+            layout_score=layout_score,
+            field_score=field_score,
+            forgery_signs=forgery_signs,
+            severity=severity,
+            filename=filename
+        )
+
+    # ==================== Async Methods ====================
+
+    async def validate_document_async(
+        self,
+        image_data: str,
+        filename: Optional[str] = None,
+        document_type: Optional[str] = None
+    ) -> FraudResult:
+        """
+        Async version with document-type-specific rules.
+
+        Args:
+            image_data: Base64-encoded image data URI
+            filename: Optional filename
+            document_type: Document type for specialized validation
+
+        Returns:
+            FraudResult with enhanced validation
+        """
+        if document_type and document_type.lower().replace(" ", "_") in self.specialized_prompts:
+            return await self._validate_specialized_async(image_data, filename, document_type)
+
+        return await super().validate_document_async(image_data, filename, document_type)
+
+    async def _validate_specialized_async(
+        self,
+        image_data: str,
+        filename: Optional[str],
+        document_type: str
+    ) -> FraudResult:
+        """Async version of specialized validation."""
+        doc_type_key = document_type.lower().replace(" ", "_")
+        specialized_prompt = self.specialized_prompts.get(doc_type_key)
+
+        logger.debug(f"Performing async specialized validation for {document_type}: {filename}")
+
+        try:
+            if specialized_prompt:
+                result = await self.llm.analyze_image_async(
+                    image_data=image_data,
+                    prompt=f"Validate this {document_type} for authenticity",
+                    system_prompt=specialized_prompt,
+                    parse_json=True
+                )
+            else:
+                result = await self.llm.validate_authenticity_async(image_data)
+        except WatsonxVisionError as e:
+            logger.error(f"Specialized validation failed for {document_type}: {e}")
+            raise DocumentAnalysisError(
+                f"Failed specialized validation for {document_type}",
+                details={"document_type": document_type, "filename": filename, "error": str(e)}
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error in specialized validation: {e}")
+            raise DocumentAnalysisError(
+                f"Unexpected error in specialized validation for {document_type}",
+                details=str(e)
+            ) from e
+
         layout_score = result.get("layout_score", 0)
         field_score = result.get("field_score", 0)
         forgery_signs = result.get("forgery_signs", [])

@@ -25,7 +25,13 @@ from .exceptions import (
     ValidationError,
     ConfigurationError,
 )
-from .retry import RetryConfig, retry_with_backoff, retry_llm_call
+from .retry import (
+    RetryConfig,
+    retry_with_backoff,
+    retry_llm_call,
+    async_retry_with_backoff,
+    async_retry_llm_call,
+)
 
 __all__ = [
     # Core classes
@@ -50,4 +56,7 @@ __all__ = [
     "RetryConfig",
     "retry_with_backoff",
     "retry_llm_call",
+    # Async retry utilities
+    "async_retry_with_backoff",
+    "async_retry_llm_call",
 ]

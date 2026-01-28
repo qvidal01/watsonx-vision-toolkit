@@ -3,10 +3,12 @@ Cross-Validation Module
 
 Provides multi-document validation to detect inconsistencies across documents
 and application data. Uses LLM-based intelligent comparison.
+Supports both synchronous and asynchronous operations.
 
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
+import asyncio
 import logging
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
@@ -19,7 +21,7 @@ from .exceptions import (
     LLMTimeoutError,
     ValidationError,
 )
-from .retry import RetryConfig, retry_llm_call
+from .retry import RetryConfig, retry_llm_call, async_retry_llm_call
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -446,6 +448,231 @@ Identify any inconsistencies between the application and documents, or between d
             results.append(result)
         return results
 
+    # ==================== Async Methods ====================
+
+    async def validate_async(
+        self,
+        application_data: Dict[str, Any],
+        document_data: List[Dict[str, Any]],
+        custom_fields: Optional[Dict[str, InconsistencySeverity]] = None
+    ) -> ValidationResult:
+        """
+        Async version of validate.
+
+        Cross-validate application data against document data asynchronously.
+
+        Args:
+            application_data: Data from the application form
+            document_data: List of extracted data from documents
+            custom_fields: Optional custom field severity mappings
+
+        Returns:
+            ValidationResult with details of any inconsistencies
+
+        Example:
+            >>> result = await validator.validate_async(
+            ...     application_data={"name": "John Doe", "ssn": "123-45-6789"},
+            ...     document_data=[
+            ...         {"doc_type": "Tax Return", "name": "John Doe", "ssn": "123-45-6789"},
+            ...     ]
+            ... )
+        """
+        if custom_fields:
+            self._field_severity.update(custom_fields)
+
+        return await self._llm_validate_async(application_data, document_data)
+
+    async def _llm_validate_async(
+        self,
+        application_data: Dict[str, Any],
+        document_data: List[Dict[str, Any]]
+    ) -> ValidationResult:
+        """
+        Async version of _llm_validate.
+
+        Raises:
+            LLMConnectionError: If connection to LLM fails
+            LLMResponseError: If LLM returns invalid response
+            LLMParseError: If JSON parsing fails
+            ValidationError: If validation logic fails
+        """
+        system_prompt = """You are a document verification specialist. Your task is to cross-validate application data against extracted document data to identify any inconsistencies.
+
+Consider that:
+1. Names may have minor variations (e.g., "John Doe" vs "John D. Doe") - flag as LOW severity
+2. Date formats may differ but represent the same date - not an inconsistency
+3. Addresses may be abbreviated differently - use judgment
+4. ID numbers (SSN, passport, license) must match exactly - HIGH/CRITICAL severity
+5. Missing data in one source is not necessarily an inconsistency
+
+Analyze the data and return JSON in this format:
+```json
+{
+  "passed": true/false,
+  "inconsistencies": [
+    {
+      "field": "field_name",
+      "source1": "value from source 1",
+      "source2": "value from source 2",
+      "source1_doc": "Application" or document type,
+      "source2_doc": document type,
+      "severity": "low|medium|high|critical",
+      "explanation": "Brief explanation of the issue"
+    }
+  ],
+  "matched_fields": ["list", "of", "matching", "fields"],
+  "summary": "Brief summary of validation results",
+  "confidence": 0-100
+}
+```
+
+Set passed=false if there are any HIGH or CRITICAL severity inconsistencies."""
+
+        docs_formatted = "\n".join([
+            f"Document {i+1} ({doc.get('doc_type', 'Unknown')}):\n{self._format_dict(doc)}"
+            for i, doc in enumerate(document_data)
+        ])
+
+        user_message = f"""Please cross-validate the following data:
+
+APPLICATION DATA:
+{self._format_dict(application_data)}
+
+EXTRACTED DOCUMENT DATA:
+{docs_formatted}
+
+Identify any inconsistencies between the application and documents, or between different documents."""
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_message)
+        ]
+
+        async def invoke_llm_async():
+            """Inner async function for retry wrapper"""
+            try:
+                return await self._llm.ainvoke(messages)
+            except TimeoutError as e:
+                logger.error(f"LLM request timed out during cross-validation: {e}")
+                raise LLMTimeoutError(
+                    "Cross-validation LLM request timed out",
+                    details={"document_count": len(document_data)}
+                ) from e
+            except ConnectionError as e:
+                logger.error(f"Failed to connect to LLM during cross-validation: {e}")
+                raise LLMConnectionError(
+                    "Failed to connect to LLM provider for cross-validation",
+                    details=str(e)
+                ) from e
+
+        try:
+            if self._retry_config:
+                response = await async_retry_llm_call(
+                    invoke_llm_async, config=self._retry_config
+                )
+            else:
+                response = await invoke_llm_async()
+        except (LLMConnectionError, LLMTimeoutError):
+            raise
+        except Exception as e:
+            logger.error(f"LLM invocation failed during cross-validation: {e}")
+            raise LLMResponseError(
+                "Cross-validation LLM invocation failed",
+                details=str(e)
+            ) from e
+
+        if response is None or not hasattr(response, 'content'):
+            logger.error("LLM returned empty response during cross-validation")
+            raise LLMResponseError(
+                "LLM returned empty or invalid response during cross-validation"
+            )
+
+        try:
+            parsed = self._parser.parse(response.content)
+        except Exception as e:
+            logger.error(f"Failed to parse cross-validation response: {e}")
+            logger.debug(f"Raw response: {response.content[:500]}")
+            raise LLMParseError(
+                "Failed to parse cross-validation response as JSON",
+                details={"raw_content": response.content[:500], "error": str(e)}
+            ) from e
+
+        try:
+            inconsistencies = []
+            for inc in parsed.get("inconsistencies", []):
+                severity_str = inc.get("severity", "medium").lower()
+                severity = InconsistencySeverity(severity_str) if severity_str in [s.value for s in InconsistencySeverity] else InconsistencySeverity.MEDIUM
+
+                inconsistencies.append(Inconsistency(
+                    field=inc.get("field", "unknown"),
+                    source1=str(inc.get("source1", "")),
+                    source2=str(inc.get("source2", "")),
+                    source1_doc=inc.get("source1_doc", "Unknown"),
+                    source2_doc=inc.get("source2_doc", "Unknown"),
+                    severity=severity,
+                    explanation=inc.get("explanation", "")
+                ))
+
+            return ValidationResult(
+                passed=parsed.get("passed", True),
+                total_inconsistencies=len(inconsistencies),
+                inconsistencies=inconsistencies,
+                matched_fields=parsed.get("matched_fields", []),
+                summary=parsed.get("summary", ""),
+                confidence=parsed.get("confidence", 80)
+            )
+        except Exception as e:
+            logger.error(f"Failed to build ValidationResult: {e}")
+            raise ValidationError(
+                "Failed to construct validation result from LLM response",
+                details={"parsed_keys": list(parsed.keys()) if isinstance(parsed, dict) else str(type(parsed))}
+            ) from e
+
+    async def validate_batch_async(
+        self,
+        packages: List[Dict[str, Any]],
+        concurrent: bool = True
+    ) -> List[ValidationResult]:
+        """
+        Async version of validate_batch.
+
+        Validate multiple document packages asynchronously.
+
+        Args:
+            packages: List of dicts with 'application_data' and 'document_data' keys
+            concurrent: If True, validate all packages concurrently (default: True)
+
+        Returns:
+            List of ValidationResult objects
+
+        Example:
+            >>> packages = [
+            ...     {"application_data": {...}, "document_data": [{...}]},
+            ...     {"application_data": {...}, "document_data": [{...}]}
+            ... ]
+            >>> results = await validator.validate_batch_async(packages)
+        """
+        if concurrent:
+            tasks = [
+                self.validate_async(
+                    application_data=package["application_data"],
+                    document_data=package["document_data"],
+                    custom_fields=package.get("custom_fields")
+                )
+                for package in packages
+            ]
+            return await asyncio.gather(*tasks)
+        else:
+            results = []
+            for package in packages:
+                result = await self.validate_async(
+                    application_data=package["application_data"],
+                    document_data=package["document_data"],
+                    custom_fields=package.get("custom_fields")
+                )
+                results.append(result)
+            return results
+
     def generate_report(
         self,
         result: ValidationResult,
@@ -562,5 +789,35 @@ class FinancialCrossValidator(CrossValidator):
         # Use parent validation with financial context
         return self.validate(
             application_data=tax_return_data,  # Use tax return as baseline
+            document_data=all_docs
+        )
+
+    async def validate_financials_async(
+        self,
+        tax_return_data: Dict[str, Any],
+        bank_statements: List[Dict[str, Any]],
+        pfs_data: Optional[Dict[str, Any]] = None,
+        tolerance_percent: float = 5.0
+    ) -> ValidationResult:
+        """
+        Async version of validate_financials.
+
+        Validate financial data consistency with tolerance asynchronously.
+
+        Args:
+            tax_return_data: Data extracted from tax returns
+            bank_statements: List of data from bank statements
+            pfs_data: Optional personal financial statement data
+            tolerance_percent: Acceptable percentage difference for amounts
+
+        Returns:
+            ValidationResult with financial validation details
+        """
+        all_docs = [tax_return_data] + bank_statements
+        if pfs_data:
+            all_docs.append(pfs_data)
+
+        return await self.validate_async(
+            application_data=tax_return_data,
             document_data=all_docs
         )
