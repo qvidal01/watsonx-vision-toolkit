@@ -19,6 +19,7 @@ from .exceptions import (
     LLMTimeoutError,
     ValidationError,
 )
+from .retry import RetryConfig, retry_llm_call
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -144,7 +145,10 @@ class CrossValidator:
         model_id: str = "mistralai/mistral-medium-2505",
         max_tokens: int = 2000,
         temperature: float = 0.0,
-        llm: Optional[Any] = None
+        llm: Optional[Any] = None,
+        retry_enabled: bool = True,
+        retry_max_attempts: int = 3,
+        retry_base_delay: float = 1.0,
     ):
         """
         Initialize cross-validator.
@@ -157,6 +161,9 @@ class CrossValidator:
             max_tokens: Maximum tokens for response
             temperature: Model temperature (0.0 for deterministic)
             llm: Optional pre-configured LLM instance
+            retry_enabled: Enable retry logic for LLM calls (default: True)
+            retry_max_attempts: Maximum retry attempts (default: 3)
+            retry_base_delay: Base delay between retries in seconds (default: 1.0)
 
         Raises:
             ImportError: If langchain-ibm is not installed
@@ -182,6 +189,15 @@ class CrossValidator:
             )
 
         self._parser = JsonOutputParser()
+
+        # Initialize retry configuration
+        if retry_enabled:
+            self._retry_config = RetryConfig(
+                max_attempts=retry_max_attempts,
+                base_delay=retry_base_delay,
+            )
+        else:
+            self._retry_config = None
 
         # Fields to compare with their severity if mismatched
         self._field_severity = {
@@ -309,20 +325,31 @@ Identify any inconsistencies between the application and documents, or between d
             HumanMessage(content=user_message)
         ]
 
+        def invoke_llm():
+            """Inner function for retry wrapper"""
+            try:
+                return self._llm.invoke(messages)
+            except TimeoutError as e:
+                logger.error(f"LLM request timed out during cross-validation: {e}")
+                raise LLMTimeoutError(
+                    "Cross-validation LLM request timed out",
+                    details={"document_count": len(document_data)}
+                ) from e
+            except ConnectionError as e:
+                logger.error(f"Failed to connect to LLM during cross-validation: {e}")
+                raise LLMConnectionError(
+                    "Failed to connect to LLM provider for cross-validation",
+                    details=str(e)
+                ) from e
+
+        # Execute with or without retry
         try:
-            response = self._llm.invoke(messages)
-        except TimeoutError as e:
-            logger.error(f"LLM request timed out during cross-validation: {e}")
-            raise LLMTimeoutError(
-                "Cross-validation LLM request timed out",
-                details={"document_count": len(document_data)}
-            ) from e
-        except ConnectionError as e:
-            logger.error(f"Failed to connect to LLM during cross-validation: {e}")
-            raise LLMConnectionError(
-                "Failed to connect to LLM provider for cross-validation",
-                details=str(e)
-            ) from e
+            if self._retry_config:
+                response = retry_llm_call(invoke_llm, config=self._retry_config)
+            else:
+                response = invoke_llm()
+        except (LLMConnectionError, LLMTimeoutError):
+            raise  # Re-raise our custom exceptions
         except Exception as e:
             logger.error(f"LLM invocation failed during cross-validation: {e}")
             raise LLMResponseError(

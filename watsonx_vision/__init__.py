@@ -25,6 +25,7 @@ from .exceptions import (
     ValidationError,
     ConfigurationError,
 )
+from .retry import RetryConfig, retry_with_backoff, retry_llm_call
 
 __all__ = [
     # Core classes
@@ -45,4 +46,8 @@ __all__ = [
     "DocumentAnalysisError",
     "ValidationError",
     "ConfigurationError",
+    # Retry utilities
+    "RetryConfig",
+    "retry_with_backoff",
+    "retry_llm_call",
 ]
