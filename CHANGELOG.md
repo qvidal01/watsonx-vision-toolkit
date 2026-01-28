@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Command-Line Interface (CLI)** - Full-featured CLI tool for document analysis
+  - `watsonx-vision classify` - Classify documents into types
+  - `watsonx-vision extract` - Extract structured information
+  - `watsonx-vision validate` - Validate document authenticity
+  - `watsonx-vision fraud` - Detect document fraud (single and batch)
+  - `watsonx-vision analyze` - Custom image analysis with prompts
+  - `watsonx-vision config` - Show/validate configuration
+  - Multiple output formats: pretty, JSON, raw
+  - Provider selection via `--provider` flag
+  - Cache support via `--cache` flag
+  - Output to file via `--output-file`
 - **Response Caching** - Cache LLM responses to reduce API calls and improve performance
   - `CacheConfig` class for configurable cache settings
   - `ResponseCache` class with LRU eviction and TTL support

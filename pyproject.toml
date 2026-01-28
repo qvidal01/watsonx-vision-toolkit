@@ -48,8 +48,11 @@ watsonx = [
 ollama = [
     "langchain-ollama>=0.2.0",
 ]
+cli = [
+    "click>=8.0.0",
+]
 all = [
-    "watsonx-vision-toolkit[watsonx,ollama]",
+    "watsonx-vision-toolkit[watsonx,ollama,cli]",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -58,7 +61,11 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "black>=23.0.0",
+    "click>=8.0.0",
 ]
+
+[project.scripts]
+watsonx-vision = "watsonx_vision.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/qvidal01/watsonx-vision-toolkit"
