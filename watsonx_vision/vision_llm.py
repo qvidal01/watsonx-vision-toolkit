@@ -28,6 +28,7 @@ from .retry import (
     async_retry_llm_call,
     DEFAULT_RETRY_CONFIG,
 )
+from .cache import CacheConfig, ResponseCache
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -263,14 +264,24 @@ class VisionLLM:
         ... )
         >>> llm = VisionLLM(config)
         >>> result = llm.classify_document(image_base64)
+
+        >>> # With caching enabled
+        >>> cache_config = CacheConfig(ttl=3600, max_size=100)
+        >>> llm = VisionLLM(config, cache_config=cache_config)
     """
 
-    def __init__(self, config: VisionLLMConfig):
+    def __init__(
+        self,
+        config: VisionLLMConfig,
+        cache_config: Optional[CacheConfig] = None,
+    ):
         """
         Initialize Vision LLM with configuration.
 
         Args:
             config: VisionLLMConfig object with provider settings
+            cache_config: Optional CacheConfig for response caching.
+                         If None, caching is disabled.
 
         Raises:
             ImportError: If required packages for provider are not installed
@@ -289,6 +300,15 @@ class VisionLLM:
             )
         else:
             self._retry_config = None
+
+        # Initialize cache
+        self._cache: Optional[ResponseCache] = None
+        if cache_config is not None:
+            self._cache = ResponseCache(cache_config)
+            logger.debug(
+                f"Cache enabled: ttl={cache_config.ttl}s, "
+                f"max_size={cache_config.max_size}"
+            )
 
     def _initialize_llm(self):
         """Initialize the LLM based on provider configuration"""
@@ -363,7 +383,8 @@ class VisionLLM:
         image_data: str,
         prompt: str,
         system_prompt: Optional[str] = None,
-        parse_json: bool = True
+        parse_json: bool = True,
+        use_cache: bool = True,
     ) -> Union[Dict, str]:
         """
         Analyze an image with a custom prompt.
@@ -373,6 +394,7 @@ class VisionLLM:
             prompt: Analysis prompt
             system_prompt: Optional system context
             parse_json: Whether to parse response as JSON
+            use_cache: Whether to use cache for this request (default: True)
 
         Returns:
             Parsed JSON dict if parse_json=True, else raw string
@@ -383,6 +405,17 @@ class VisionLLM:
             LLMParseError: If JSON parsing fails
             LLMTimeoutError: If request times out
         """
+        # Check cache first
+        cache_key = None
+        if use_cache and self._cache is not None:
+            cache_key = self._cache._generate_key(
+                image_data, prompt, system_prompt, parse_json=parse_json
+            )
+            cached_result = self._cache.get(cache_key)
+            if cached_result is not None:
+                logger.debug("Returning cached result")
+                return cached_result
+
         messages = self._create_vision_message(image_data, prompt, system_prompt)
 
         def invoke_llm():
@@ -426,7 +459,7 @@ class VisionLLM:
 
         if parse_json:
             try:
-                return self._parser.parse(response.content)
+                result = self._parser.parse(response.content)
             except Exception as e:
                 logger.error(f"Failed to parse LLM response as JSON: {e}")
                 logger.debug(f"Raw response content: {response.content[:500]}")
@@ -434,8 +467,14 @@ class VisionLLM:
                     "Failed to parse LLM response as JSON",
                     details={"raw_content": response.content[:500], "error": str(e)}
                 ) from e
+        else:
+            result = response.content
 
-        return response.content
+        # Store in cache
+        if cache_key is not None and self._cache is not None:
+            self._cache.set(cache_key, result)
+
+        return result
 
     def classify_document(
         self,
@@ -622,7 +661,8 @@ Return your analysis in JSON format:
         image_data: str,
         prompt: str,
         system_prompt: Optional[str] = None,
-        parse_json: bool = True
+        parse_json: bool = True,
+        use_cache: bool = True,
     ) -> Union[Dict, str]:
         """
         Async version of analyze_image.
@@ -634,6 +674,7 @@ Return your analysis in JSON format:
             prompt: Analysis prompt
             system_prompt: Optional system context
             parse_json: Whether to parse response as JSON
+            use_cache: Whether to use cache for this request (default: True)
 
         Returns:
             Parsed JSON dict if parse_json=True, else raw string
@@ -647,6 +688,17 @@ Return your analysis in JSON format:
         Example:
             >>> result = await llm.analyze_image_async(image_data, "Describe this image")
         """
+        # Check cache first (cache operations are synchronous but fast)
+        cache_key = None
+        if use_cache and self._cache is not None:
+            cache_key = self._cache._generate_key(
+                image_data, prompt, system_prompt, parse_json=parse_json
+            )
+            cached_result = self._cache.get(cache_key)
+            if cached_result is not None:
+                logger.debug("Returning cached result")
+                return cached_result
+
         messages = self._create_vision_message(image_data, prompt, system_prompt)
 
         async def invoke_llm_async():
@@ -692,7 +744,7 @@ Return your analysis in JSON format:
 
         if parse_json:
             try:
-                return self._parser.parse(response.content)
+                result = self._parser.parse(response.content)
             except Exception as e:
                 logger.error(f"Failed to parse LLM response as JSON: {e}")
                 logger.debug(f"Raw response content: {response.content[:500]}")
@@ -700,8 +752,14 @@ Return your analysis in JSON format:
                     "Failed to parse LLM response as JSON",
                     details={"raw_content": response.content[:500], "error": str(e)}
                 ) from e
+        else:
+            result = response.content
 
-        return response.content
+        # Store in cache
+        if cache_key is not None and self._cache is not None:
+            self._cache.set(cache_key, result)
+
+        return result
 
     async def classify_document_async(
         self,
@@ -874,6 +932,49 @@ Return your analysis in JSON format:
             system_prompt=system_prompt,
             parse_json=True
         )
+
+    # ==================== Cache Methods ====================
+
+    @property
+    def cache(self) -> Optional[ResponseCache]:
+        """
+        Get the response cache instance.
+
+        Returns:
+            ResponseCache instance or None if caching is disabled
+        """
+        return self._cache
+
+    @property
+    def cache_enabled(self) -> bool:
+        """Check if caching is enabled."""
+        return self._cache is not None and self._cache.config.enabled
+
+    def cache_stats(self) -> Optional[Dict[str, Any]]:
+        """
+        Get cache statistics.
+
+        Returns:
+            Dictionary with cache statistics, or None if caching is disabled
+
+        Example:
+            >>> stats = llm.cache_stats()
+            >>> print(f"Hit rate: {stats['hit_rate']:.2%}")
+        """
+        if self._cache is None:
+            return None
+        return self._cache.stats().to_dict()
+
+    def cache_clear(self) -> int:
+        """
+        Clear all cached responses.
+
+        Returns:
+            Number of entries cleared, or 0 if caching is disabled
+        """
+        if self._cache is None:
+            return 0
+        return self._cache.clear()
 
     @staticmethod
     def encode_image_to_base64(

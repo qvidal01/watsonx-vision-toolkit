@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Response Caching** - Cache LLM responses to reduce API calls and improve performance
+  - `CacheConfig` class for configurable cache settings
+  - `ResponseCache` class with LRU eviction and TTL support
+  - In-memory and file-based backends
+  - Cache statistics (`CacheStats`) for monitoring hit rates
+  - Integration with `VisionLLM` via `cache_config` parameter
+  - `cache_stats()` and `cache_clear()` methods on `VisionLLM`
+  - Environment variable support: `VISION_CACHE_ENABLED`, `VISION_CACHE_TTL`, `VISION_CACHE_MAX_SIZE`, etc.
 - **Environment Variable Configuration** - Load configuration from environment variables
   - `VisionLLMConfig.from_env()` class method for easy production deployment
   - Support for `WATSONX_API_KEY`, `WATSONX_URL`, `WATSONX_PROJECT_ID`
