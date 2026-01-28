@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Examples Directory** - Practical code samples
+  - `basic_classification.py` - Document type classification
+  - `information_extraction.py` - Extracting structured data with presets
+  - `fraud_detection.py` - Single and batch fraud detection
+  - `cross_validation.py` - Multi-document consistency validation
+  - `retry_configuration.py` - Configuring retry behavior
+  - `complete_workflow.py` - End-to-end loan processing workflow
 - **CI/CD Pipeline** - GitHub Actions workflow
   - Automated testing across Python 3.9-3.13
   - Ruff linting with auto-formatting checks
