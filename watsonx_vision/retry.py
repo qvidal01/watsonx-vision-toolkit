@@ -2,13 +2,15 @@
 Retry Utilities for Watsonx Vision Toolkit
 
 Provides retry logic with exponential backoff for handling transient LLM failures.
+Supports both synchronous and asynchronous operations.
 """
 
+import asyncio
 import logging
 import random
 import time
 from functools import wraps
-from typing import Callable, Optional, Tuple, Type, TypeVar, Union
+from typing import Awaitable, Callable, Optional, Tuple, Type, TypeVar, Union
 
 from .exceptions import (
     LLMConnectionError,
@@ -206,6 +208,137 @@ def retry_llm_call(
                     on_retry(e, attempt + 1)
 
                 time.sleep(delay)
+            else:
+                logger.error(
+                    f"All {config.max_attempts} attempts failed. Last error: {e}"
+                )
+
+    if last_exception:
+        raise last_exception
+
+    raise RuntimeError("Unexpected retry loop exit")
+
+
+def async_retry_with_backoff(
+    config: Optional[RetryConfig] = None,
+    on_retry: Optional[Callable[[Exception, int], None]] = None,
+) -> Callable:
+    """
+    Async decorator that retries a coroutine with exponential backoff.
+
+    Args:
+        config: RetryConfig instance (uses DEFAULT_RETRY_CONFIG if None)
+        on_retry: Optional callback called on each retry with (exception, attempt_number)
+
+    Returns:
+        Decorated async function with retry logic
+
+    Example:
+        >>> @async_retry_with_backoff(RetryConfig(max_attempts=3))
+        ... async def call_llm():
+        ...     return await llm.ainvoke(messages)
+
+        >>> # With custom retry callback
+        >>> def log_retry(exc, attempt):
+        ...     print(f"Retry {attempt}: {exc}")
+        >>> @async_retry_with_backoff(on_retry=log_retry)
+        ... async def call_llm():
+        ...     return await llm.ainvoke(messages)
+    """
+    if config is None:
+        config = DEFAULT_RETRY_CONFIG
+
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            last_exception: Optional[Exception] = None
+
+            for attempt in range(config.max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except config.retry_exceptions as e:
+                    last_exception = e
+
+                    if attempt < config.max_attempts - 1:
+                        delay = config.calculate_delay(attempt)
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{config.max_attempts} failed: {e}. "
+                            f"Retrying in {delay:.2f}s..."
+                        )
+
+                        if on_retry:
+                            on_retry(e, attempt + 1)
+
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(
+                            f"All {config.max_attempts} attempts failed. Last error: {e}"
+                        )
+
+            if last_exception:
+                raise last_exception
+
+            raise RuntimeError("Unexpected retry loop exit")
+
+        return wrapper
+
+    return decorator
+
+
+async def async_retry_llm_call(
+    func: Callable[..., Awaitable[T]],
+    *args,
+    config: Optional[RetryConfig] = None,
+    on_retry: Optional[Callable[[Exception, int], None]] = None,
+    **kwargs,
+) -> T:
+    """
+    Execute an async function with retry logic (non-decorator version).
+
+    Useful when you can't use a decorator or need dynamic retry behavior.
+
+    Args:
+        func: Async function to execute
+        *args: Positional arguments for func
+        config: RetryConfig instance
+        on_retry: Optional callback on retry
+        **kwargs: Keyword arguments for func
+
+    Returns:
+        Result of func
+
+    Raises:
+        The last exception if all retries fail
+
+    Example:
+        >>> result = await async_retry_llm_call(
+        ...     llm.ainvoke,
+        ...     messages,
+        ...     config=RetryConfig(max_attempts=5)
+        ... )
+    """
+    if config is None:
+        config = DEFAULT_RETRY_CONFIG
+
+    last_exception: Optional[Exception] = None
+
+    for attempt in range(config.max_attempts):
+        try:
+            return await func(*args, **kwargs)
+        except config.retry_exceptions as e:
+            last_exception = e
+
+            if attempt < config.max_attempts - 1:
+                delay = config.calculate_delay(attempt)
+                logger.warning(
+                    f"Attempt {attempt + 1}/{config.max_attempts} failed: {e}. "
+                    f"Retrying in {delay:.2f}s..."
+                )
+
+                if on_retry:
+                    on_retry(e, attempt + 1)
+
+                await asyncio.sleep(delay)
             else:
                 logger.error(
                     f"All {config.max_attempts} attempts failed. Last error: {e}"
