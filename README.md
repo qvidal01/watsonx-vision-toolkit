@@ -340,6 +340,8 @@ export OLLAMA_URL="http://localhost:11434"
 
 ## API Reference
 
+> **Full API Documentation:** See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete API documentation including all parameters, return types, exceptions, and examples.
+
 ### VisionLLM
 
 ```python

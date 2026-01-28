@@ -7,11 +7,20 @@ Detects forgery, manipulation, and other fraud indicators.
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
+import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
 from .vision_llm import VisionLLM
+from .exceptions import (
+    DocumentAnalysisError,
+    LLMResponseError,
+    LLMParseError,
+    WatsonxVisionError,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class FraudSeverity(Enum):
@@ -122,18 +131,44 @@ class FraudDetector:
         Returns:
             FraudResult with validation details
 
+        Raises:
+            DocumentAnalysisError: If document analysis fails
+
         Example:
             >>> result = detector.validate_document(image_base64, "passport.png")
             >>> print(f"Valid: {result.valid}, Confidence: {result.confidence}%")
         """
-        # Perform vision-based validation
-        raw_result = self.llm.validate_authenticity(image_data)
+        logger.debug(f"Validating document: {filename or 'unnamed'}")
 
-        # Extract scores
+        try:
+            # Perform vision-based validation
+            raw_result = self.llm.validate_authenticity(image_data)
+        except WatsonxVisionError as e:
+            logger.error(f"Vision analysis failed for {filename}: {e}")
+            raise DocumentAnalysisError(
+                f"Failed to analyze document: {filename or 'unnamed'}",
+                details={"original_error": str(e), "filename": filename}
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error during document validation: {e}")
+            raise DocumentAnalysisError(
+                f"Unexpected error analyzing document: {filename or 'unnamed'}",
+                details=str(e)
+            ) from e
+
+        # Extract scores with safe defaults
         layout_score = raw_result.get("layout_score", 0)
         field_score = raw_result.get("field_score", 0)
         forgery_signs = raw_result.get("forgery_signs", [])
         reason = raw_result.get("reason", "No reason provided")
+
+        # Validate score types
+        if not isinstance(layout_score, (int, float)):
+            logger.warning(f"Invalid layout_score type: {type(layout_score)}, defaulting to 0")
+            layout_score = 0
+        if not isinstance(field_score, (int, float)):
+            logger.warning(f"Invalid field_score type: {type(field_score)}, defaulting to 0")
+            field_score = 0
 
         # Calculate overall confidence
         confidence = int((layout_score + field_score) / 2)
@@ -150,6 +185,8 @@ class FraudDetector:
         severity = self._calculate_severity(
             valid, confidence, len(forgery_signs)
         )
+
+        logger.debug(f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}")
 
         return FraudResult(
             valid=valid,
@@ -333,23 +370,43 @@ class SpecializedFraudDetector(FraudDetector):
         filename: Optional[str],
         document_type: str
     ) -> FraudResult:
-        """Perform specialized validation for specific document types"""
+        """
+        Perform specialized validation for specific document types.
+
+        Raises:
+            DocumentAnalysisError: If specialized analysis fails
+        """
         doc_type_key = document_type.lower().replace(" ", "_")
         specialized_prompt = self.specialized_prompts.get(doc_type_key)
 
-        if specialized_prompt:
-            # Use custom prompt for this document type
-            result = self.llm.analyze_image(
-                image_data=image_data,
-                prompt=f"Validate this {document_type} for authenticity",
-                system_prompt=specialized_prompt,
-                parse_json=True
-            )
-        else:
-            # Fall back to generic validation
-            result = self.llm.validate_authenticity(image_data)
+        logger.debug(f"Performing specialized validation for {document_type}: {filename}")
 
-        # Convert to FraudResult
+        try:
+            if specialized_prompt:
+                # Use custom prompt for this document type
+                result = self.llm.analyze_image(
+                    image_data=image_data,
+                    prompt=f"Validate this {document_type} for authenticity",
+                    system_prompt=specialized_prompt,
+                    parse_json=True
+                )
+            else:
+                # Fall back to generic validation
+                result = self.llm.validate_authenticity(image_data)
+        except WatsonxVisionError as e:
+            logger.error(f"Specialized validation failed for {document_type}: {e}")
+            raise DocumentAnalysisError(
+                f"Failed specialized validation for {document_type}",
+                details={"document_type": document_type, "filename": filename, "error": str(e)}
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error in specialized validation: {e}")
+            raise DocumentAnalysisError(
+                f"Unexpected error in specialized validation for {document_type}",
+                details=str(e)
+            ) from e
+
+        # Convert to FraudResult with safe defaults
         layout_score = result.get("layout_score", 0)
         field_score = result.get("field_score", 0)
         forgery_signs = result.get("forgery_signs", [])

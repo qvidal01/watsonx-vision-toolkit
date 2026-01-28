@@ -8,10 +8,19 @@ Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
 import base64
+import logging
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass
 from enum import Enum
+
+from .exceptions import (
+    LLMConnectionError,
+    LLMResponseError,
+    LLMParseError,
+    LLMTimeoutError,
+    ConfigurationError,
+)
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -20,6 +29,8 @@ try:
     WATSONX_AVAILABLE = True
 except ImportError:
     WATSONX_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Enum):
@@ -166,12 +177,54 @@ class VisionLLM:
 
         Returns:
             Parsed JSON dict if parse_json=True, else raw string
+
+        Raises:
+            LLMConnectionError: If connection to LLM fails
+            LLMResponseError: If LLM returns invalid response
+            LLMParseError: If JSON parsing fails
+            LLMTimeoutError: If request times out
         """
         messages = self._create_vision_message(image_data, prompt, system_prompt)
-        response = self._llm.invoke(messages)
+
+        try:
+            response = self._llm.invoke(messages)
+        except TimeoutError as e:
+            logger.error(f"LLM request timed out: {e}")
+            raise LLMTimeoutError(
+                "LLM request timed out",
+                details={"prompt_length": len(prompt)}
+            ) from e
+        except ConnectionError as e:
+            logger.error(f"Failed to connect to LLM: {e}")
+            raise LLMConnectionError(
+                f"Failed to connect to LLM provider: {self.config.provider.value}",
+                details=str(e)
+            ) from e
+        except Exception as e:
+            logger.error(f"LLM invocation failed: {e}")
+            raise LLMResponseError(
+                "LLM invocation failed",
+                details=str(e)
+            ) from e
+
+        if response is None or not hasattr(response, 'content'):
+            logger.error("LLM returned empty or invalid response")
+            raise LLMResponseError(
+                "LLM returned empty or invalid response",
+                details={"response": str(response)}
+            )
 
         if parse_json:
-            return self._parser.parse(response.content)
+            try:
+                return self._parser.parse(response.content)
+            except Exception as e:
+                logger.error(f"Failed to parse LLM response as JSON: {e}")
+                logger.debug(f"Raw response content: {response.content[:500]}")
+                raise LLMParseError(
+                    "Failed to parse LLM response as JSON",
+                    details={"raw_content": response.content[:500], "error": str(e)}
+                ) from e
+
         return response.content
 
     def classify_document(

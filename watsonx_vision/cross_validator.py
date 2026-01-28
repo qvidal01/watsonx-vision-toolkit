@@ -7,9 +7,18 @@ and application data. Uses LLM-based intelligent comparison.
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
+import logging
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from enum import Enum
+
+from .exceptions import (
+    LLMConnectionError,
+    LLMResponseError,
+    LLMParseError,
+    LLMTimeoutError,
+    ValidationError,
+)
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -18,6 +27,8 @@ try:
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 class InconsistencySeverity(Enum):
@@ -235,7 +246,15 @@ class CrossValidator:
         application_data: Dict[str, Any],
         document_data: List[Dict[str, Any]]
     ) -> ValidationResult:
-        """Use LLM to perform intelligent cross-validation"""
+        """
+        Use LLM to perform intelligent cross-validation.
+
+        Raises:
+            LLMConnectionError: If connection to LLM fails
+            LLMResponseError: If LLM returns invalid response
+            LLMParseError: If JSON parsing fails
+            ValidationError: If validation logic fails
+        """
 
         system_prompt = """You are a document verification specialist. Your task is to cross-validate application data against extracted document data to identify any inconsistencies.
 
@@ -290,33 +309,74 @@ Identify any inconsistencies between the application and documents, or between d
             HumanMessage(content=user_message)
         ]
 
-        response = self._llm.invoke(messages)
-        parsed = self._parser.parse(response.content)
+        try:
+            response = self._llm.invoke(messages)
+        except TimeoutError as e:
+            logger.error(f"LLM request timed out during cross-validation: {e}")
+            raise LLMTimeoutError(
+                "Cross-validation LLM request timed out",
+                details={"document_count": len(document_data)}
+            ) from e
+        except ConnectionError as e:
+            logger.error(f"Failed to connect to LLM during cross-validation: {e}")
+            raise LLMConnectionError(
+                "Failed to connect to LLM provider for cross-validation",
+                details=str(e)
+            ) from e
+        except Exception as e:
+            logger.error(f"LLM invocation failed during cross-validation: {e}")
+            raise LLMResponseError(
+                "Cross-validation LLM invocation failed",
+                details=str(e)
+            ) from e
 
-        # Convert to ValidationResult
-        inconsistencies = []
-        for inc in parsed.get("inconsistencies", []):
-            severity_str = inc.get("severity", "medium").lower()
-            severity = InconsistencySeverity(severity_str) if severity_str in [s.value for s in InconsistencySeverity] else InconsistencySeverity.MEDIUM
+        if response is None or not hasattr(response, 'content'):
+            logger.error("LLM returned empty response during cross-validation")
+            raise LLMResponseError(
+                "LLM returned empty or invalid response during cross-validation"
+            )
 
-            inconsistencies.append(Inconsistency(
-                field=inc.get("field", "unknown"),
-                source1=str(inc.get("source1", "")),
-                source2=str(inc.get("source2", "")),
-                source1_doc=inc.get("source1_doc", "Unknown"),
-                source2_doc=inc.get("source2_doc", "Unknown"),
-                severity=severity,
-                explanation=inc.get("explanation", "")
-            ))
+        try:
+            parsed = self._parser.parse(response.content)
+        except Exception as e:
+            logger.error(f"Failed to parse cross-validation response: {e}")
+            logger.debug(f"Raw response: {response.content[:500]}")
+            raise LLMParseError(
+                "Failed to parse cross-validation response as JSON",
+                details={"raw_content": response.content[:500], "error": str(e)}
+            ) from e
 
-        return ValidationResult(
-            passed=parsed.get("passed", True),
-            total_inconsistencies=len(inconsistencies),
-            inconsistencies=inconsistencies,
-            matched_fields=parsed.get("matched_fields", []),
-            summary=parsed.get("summary", ""),
-            confidence=parsed.get("confidence", 80)
-        )
+        # Convert to ValidationResult with error handling
+        try:
+            inconsistencies = []
+            for inc in parsed.get("inconsistencies", []):
+                severity_str = inc.get("severity", "medium").lower()
+                severity = InconsistencySeverity(severity_str) if severity_str in [s.value for s in InconsistencySeverity] else InconsistencySeverity.MEDIUM
+
+                inconsistencies.append(Inconsistency(
+                    field=inc.get("field", "unknown"),
+                    source1=str(inc.get("source1", "")),
+                    source2=str(inc.get("source2", "")),
+                    source1_doc=inc.get("source1_doc", "Unknown"),
+                    source2_doc=inc.get("source2_doc", "Unknown"),
+                    severity=severity,
+                    explanation=inc.get("explanation", "")
+                ))
+
+            return ValidationResult(
+                passed=parsed.get("passed", True),
+                total_inconsistencies=len(inconsistencies),
+                inconsistencies=inconsistencies,
+                matched_fields=parsed.get("matched_fields", []),
+                summary=parsed.get("summary", ""),
+                confidence=parsed.get("confidence", 80)
+            )
+        except Exception as e:
+            logger.error(f"Failed to build ValidationResult: {e}")
+            raise ValidationError(
+                "Failed to construct validation result from LLM response",
+                details={"parsed_keys": list(parsed.keys()) if isinstance(parsed, dict) else str(type(parsed))}
+            ) from e
 
     def _format_dict(self, data: Dict) -> str:
         """Format dictionary for LLM prompt"""
