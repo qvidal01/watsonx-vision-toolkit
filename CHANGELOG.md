@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CI/CD Pipeline** - GitHub Actions workflow
+  - Automated testing across Python 3.9-3.13
+  - Ruff linting with auto-formatting checks
+  - Mypy type checking for strict type safety
+  - Coverage reporting with pytest-cov
+- **Retry Logic with Exponential Backoff**
+  - `RetryConfig` class for configurable retry behavior
+  - `retry_with_backoff` decorator for automatic retries
+  - `retry_llm_call` function for non-decorator usage
+  - Exponential backoff with optional jitter
+  - Configurable retry exceptions, delays, and max attempts
+  - Integrated into `VisionLLM` and `CrossValidator` classes
 - **Custom Exception Hierarchy** - Structured error handling
   - `WatsonxVisionError` - Base exception for all toolkit errors
   - `LLMConnectionError` - Connection failures to LLM providers

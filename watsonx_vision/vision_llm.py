@@ -21,6 +21,7 @@ from .exceptions import (
     LLMTimeoutError,
     ConfigurationError,
 )
+from .retry import RetryConfig, retry_llm_call, DEFAULT_RETRY_CONFIG
 
 try:
     from langchain_ibm import ChatWatsonx
@@ -52,6 +53,11 @@ class VisionLLMConfig:
     max_tokens: int = 2000
     temperature: float = 0.0
     top_p: float = 0.1
+    # Retry configuration
+    retry_enabled: bool = True
+    retry_max_attempts: int = 3
+    retry_base_delay: float = 1.0
+    retry_max_delay: float = 60.0
 
 
 class VisionLLM:
@@ -90,6 +96,16 @@ class VisionLLM:
         self.config = config
         self._llm = self._initialize_llm()
         self._parser = JsonOutputParser()
+
+        # Initialize retry configuration
+        if config.retry_enabled:
+            self._retry_config = RetryConfig(
+                max_attempts=config.retry_max_attempts,
+                base_delay=config.retry_base_delay,
+                max_delay=config.retry_max_delay,
+            )
+        else:
+            self._retry_config = None
 
     def _initialize_llm(self):
         """Initialize the LLM based on provider configuration"""
@@ -186,20 +202,31 @@ class VisionLLM:
         """
         messages = self._create_vision_message(image_data, prompt, system_prompt)
 
+        def invoke_llm():
+            """Inner function for retry wrapper"""
+            try:
+                return self._llm.invoke(messages)
+            except TimeoutError as e:
+                logger.error(f"LLM request timed out: {e}")
+                raise LLMTimeoutError(
+                    "LLM request timed out",
+                    details={"prompt_length": len(prompt)}
+                ) from e
+            except ConnectionError as e:
+                logger.error(f"Failed to connect to LLM: {e}")
+                raise LLMConnectionError(
+                    f"Failed to connect to LLM provider: {self.config.provider.value}",
+                    details=str(e)
+                ) from e
+
+        # Execute with or without retry
         try:
-            response = self._llm.invoke(messages)
-        except TimeoutError as e:
-            logger.error(f"LLM request timed out: {e}")
-            raise LLMTimeoutError(
-                "LLM request timed out",
-                details={"prompt_length": len(prompt)}
-            ) from e
-        except ConnectionError as e:
-            logger.error(f"Failed to connect to LLM: {e}")
-            raise LLMConnectionError(
-                f"Failed to connect to LLM provider: {self.config.provider.value}",
-                details=str(e)
-            ) from e
+            if self._retry_config:
+                response = retry_llm_call(invoke_llm, config=self._retry_config)
+            else:
+                response = invoke_llm()
+        except (LLMConnectionError, LLMTimeoutError):
+            raise  # Re-raise our custom exceptions
         except Exception as e:
             logger.error(f"LLM invocation failed: {e}")
             raise LLMResponseError(
