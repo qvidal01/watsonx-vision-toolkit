@@ -7,7 +7,7 @@ and multi-document validation using IBM Watsonx AI or compatible LLM providers.
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "AIQSO - Quinn Vidal"
 __email__ = "quinn@aiqso.io"
 
