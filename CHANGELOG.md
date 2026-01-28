@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Environment Variable Configuration** - Load configuration from environment variables
+  - `VisionLLMConfig.from_env()` class method for easy production deployment
+  - Support for `WATSONX_API_KEY`, `WATSONX_URL`, `WATSONX_PROJECT_ID`
+  - Support for `OLLAMA_URL`, `OLLAMA_HOST` (Ollama provider)
+  - Support for `VISION_PROVIDER`, `VISION_MODEL_ID`, `VISION_MAX_TOKENS`, `VISION_TEMPERATURE`, `VISION_TOP_P`
+  - Retry configuration: `VISION_RETRY_ENABLED`, `VISION_RETRY_MAX_ATTEMPTS`, `VISION_RETRY_BASE_DELAY`, `VISION_RETRY_MAX_DELAY`
+  - Optional prefix support for multiple instances (e.g., `PROD_WATSONX_API_KEY`)
+  - Explicit overrides via keyword arguments
 - **Async Support** - Full async/await API for concurrent operations
   - `VisionLLM`: `analyze_image_async`, `classify_document_async`, `extract_information_async`, `validate_authenticity_async`
   - `FraudDetector`: `validate_document_async`, `validate_batch_async` (with concurrent option)

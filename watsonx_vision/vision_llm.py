@@ -10,6 +10,7 @@ Extracted from IBM Watsonx Loan Preprocessing Agents project.
 import base64
 import logging
 import mimetypes
+import os
 from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -63,6 +64,183 @@ class VisionLLMConfig:
     retry_max_attempts: int = 3
     retry_base_delay: float = 1.0
     retry_max_delay: float = 60.0
+
+    @classmethod
+    def from_env(
+        cls,
+        prefix: str = "",
+        **overrides
+    ) -> "VisionLLMConfig":
+        """
+        Create configuration from environment variables.
+
+        Environment variables (checked in order):
+            Provider:
+                - {PREFIX}VISION_PROVIDER or VISION_PROVIDER
+                - Values: "watsonx", "ollama", "openai", "anthropic"
+
+            Model:
+                - {PREFIX}VISION_MODEL_ID or WATSONX_MODEL or VISION_MODEL_ID
+
+            Watsonx-specific:
+                - {PREFIX}WATSONX_API_KEY or WATSONX_API_KEY or WATSONX_APIKEY
+                - {PREFIX}WATSONX_URL or WATSONX_URL
+                - {PREFIX}WATSONX_PROJECT_ID or WATSONX_PROJECT_ID
+
+            Ollama-specific:
+                - {PREFIX}OLLAMA_URL or OLLAMA_URL or OLLAMA_HOST
+
+            Generation parameters:
+                - {PREFIX}VISION_MAX_TOKENS or VISION_MAX_TOKENS
+                - {PREFIX}VISION_TEMPERATURE or VISION_TEMPERATURE
+                - {PREFIX}VISION_TOP_P or VISION_TOP_P
+
+            Retry configuration:
+                - {PREFIX}VISION_RETRY_ENABLED or VISION_RETRY_ENABLED
+                - {PREFIX}VISION_RETRY_MAX_ATTEMPTS or VISION_RETRY_MAX_ATTEMPTS
+                - {PREFIX}VISION_RETRY_BASE_DELAY or VISION_RETRY_BASE_DELAY
+                - {PREFIX}VISION_RETRY_MAX_DELAY or VISION_RETRY_MAX_DELAY
+
+        Args:
+            prefix: Optional prefix for environment variables (e.g., "APP_")
+            **overrides: Explicit values that override environment variables
+
+        Returns:
+            VisionLLMConfig instance
+
+        Raises:
+            ConfigurationError: If required variables are missing or invalid
+
+        Example:
+            >>> # With environment variables set:
+            >>> # WATSONX_API_KEY=xxx WATSONX_PROJECT_ID=yyy
+            >>> config = VisionLLMConfig.from_env()
+            >>> llm = VisionLLM(config)
+
+            >>> # With prefix for multiple instances:
+            >>> # PROD_WATSONX_API_KEY=xxx PROD_VISION_PROVIDER=watsonx
+            >>> config = VisionLLMConfig.from_env(prefix="PROD_")
+
+            >>> # With explicit overrides:
+            >>> config = VisionLLMConfig.from_env(temperature=0.5)
+        """
+        def get_env(*keys: str, default: Optional[str] = None) -> Optional[str]:
+            """Get first available environment variable from list of keys."""
+            for key in keys:
+                # Try with prefix first
+                if prefix:
+                    prefixed_key = f"{prefix}{key}"
+                    value = os.environ.get(prefixed_key)
+                    if value is not None:
+                        return value
+                # Then try without prefix
+                value = os.environ.get(key)
+                if value is not None:
+                    return value
+            return default
+
+        def get_env_bool(
+            *keys: str,
+            default: bool = True
+        ) -> bool:
+            """Get boolean from environment variable."""
+            value = get_env(*keys)
+            if value is None:
+                return default
+            return value.lower() in ("true", "1", "yes", "on")
+
+        def get_env_int(
+            *keys: str,
+            default: int = 0
+        ) -> int:
+            """Get integer from environment variable."""
+            value = get_env(*keys)
+            if value is None:
+                return default
+            try:
+                return int(value)
+            except ValueError:
+                logger.warning(
+                    f"Invalid integer value for {keys[0]}: {value}, using default {default}"
+                )
+                return default
+
+        def get_env_float(
+            *keys: str,
+            default: float = 0.0
+        ) -> float:
+            """Get float from environment variable."""
+            value = get_env(*keys)
+            if value is None:
+                return default
+            try:
+                return float(value)
+            except ValueError:
+                logger.warning(
+                    f"Invalid float value for {keys[0]}: {value}, using default {default}"
+                )
+                return default
+
+        # Determine provider
+        provider_str = get_env("VISION_PROVIDER", default="watsonx")
+        try:
+            provider = LLMProvider(provider_str.lower())
+        except ValueError:
+            raise ConfigurationError(
+                f"Invalid provider: {provider_str}. "
+                f"Valid options: {[p.value for p in LLMProvider]}"
+            )
+
+        # Get model ID
+        model_id = get_env(
+            "VISION_MODEL_ID",
+            "WATSONX_MODEL",
+            default="meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
+        )
+
+        # Get provider-specific configuration
+        api_key = get_env("WATSONX_API_KEY", "WATSONX_APIKEY")
+        project_id = get_env("WATSONX_PROJECT_ID")
+
+        # URL depends on provider
+        if provider == LLMProvider.WATSONX:
+            url = get_env("WATSONX_URL")
+        elif provider == LLMProvider.OLLAMA:
+            url = get_env("OLLAMA_URL", "OLLAMA_HOST", default="http://localhost:11434")
+        else:
+            url = get_env("VISION_LLM_URL")
+
+        # Generation parameters
+        max_tokens = get_env_int("VISION_MAX_TOKENS", default=2000)
+        temperature = get_env_float("VISION_TEMPERATURE", default=0.0)
+        top_p = get_env_float("VISION_TOP_P", default=0.1)
+
+        # Retry configuration
+        retry_enabled = get_env_bool("VISION_RETRY_ENABLED", default=True)
+        retry_max_attempts = get_env_int("VISION_RETRY_MAX_ATTEMPTS", default=3)
+        retry_base_delay = get_env_float("VISION_RETRY_BASE_DELAY", default=1.0)
+        retry_max_delay = get_env_float("VISION_RETRY_MAX_DELAY", default=60.0)
+
+        # Build config dict and apply overrides
+        config_dict = {
+            "provider": provider,
+            "model_id": model_id,
+            "api_key": api_key,
+            "url": url,
+            "project_id": project_id,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "retry_enabled": retry_enabled,
+            "retry_max_attempts": retry_max_attempts,
+            "retry_base_delay": retry_base_delay,
+            "retry_max_delay": retry_max_delay,
+        }
+
+        # Apply explicit overrides
+        config_dict.update(overrides)
+
+        return cls(**config_dict)
 
 
 class VisionLLM:
