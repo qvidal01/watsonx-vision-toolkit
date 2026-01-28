@@ -63,13 +63,18 @@ dev = [
     "black>=23.0.0",
     "click>=8.0.0",
 ]
+docs = [
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.24.0",
+    "pymdown-extensions>=10.0.0",
+]
 
 [project.scripts]
 watsonx-vision = "watsonx_vision.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/qvidal01/watsonx-vision-toolkit"
-Documentation = "https://github.com/qvidal01/watsonx-vision-toolkit#readme"
+Documentation = "https://qvidal01.github.io/watsonx-vision-toolkit/"
 Repository = "https://github.com/qvidal01/watsonx-vision-toolkit.git"
 Issues = "https://github.com/qvidal01/watsonx-vision-toolkit/issues"
 

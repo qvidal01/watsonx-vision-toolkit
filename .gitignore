@@ -46,3 +46,6 @@ Thumbs.db
 # Project specific
 *.db
 logs/
+
+# Documentation build
+site/
