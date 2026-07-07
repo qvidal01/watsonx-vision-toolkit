@@ -30,10 +30,17 @@ from .retry import (
 )
 from .cache import CacheConfig, ResponseCache
 
+# langchain_core is a dependency of every provider extra (ollama/watsonx/...),
+# so its imports must NOT be gated behind the watsonx-only langchain_ibm import —
+# otherwise an ollama-only install fails first and leaves JsonOutputParser unbound.
 try:
-    from langchain_ibm import ChatWatsonx
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_core.output_parsers import JsonOutputParser
+except ImportError:
+    HumanMessage = SystemMessage = JsonOutputParser = None
+
+try:
+    from langchain_ibm import ChatWatsonx
     WATSONX_AVAILABLE = True
 except ImportError:
     WATSONX_AVAILABLE = False
