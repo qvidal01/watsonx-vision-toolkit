@@ -11,7 +11,7 @@ __version__ = "0.2.0"
 __author__ = "AIQSO - Quinn Vidal"
 __email__ = "quinn@aiqso.io"
 
-from .vision_llm import VisionLLM, VisionLLMConfig
+from .vision_llm import LLMProvider, VisionLLM, VisionLLMConfig
 from .fraud_detector import FraudDetector, FraudResult
 from .cross_validator import CrossValidator, ValidationResult
 from .decision_engine import DecisionEngine, Decision
@@ -40,6 +40,7 @@ from .cache import (
 
 __all__ = [
     # Core classes
+    "LLMProvider",
     "VisionLLM",
     "VisionLLMConfig",
     "FraudDetector",
