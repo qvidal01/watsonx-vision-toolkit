@@ -1,5 +1,4 @@
-"""
-Fraud Detection Module
+"""Fraud Detection Module
 
 Provides document authenticity validation using vision-based analysis.
 Detects forgery, manipulation, and other fraud indicators.
@@ -10,23 +9,22 @@ Extracted from IBM Watsonx Loan Preprocessing Agents project.
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Dict, List, Optional
 
-from .vision_llm import VisionLLM
 from .exceptions import (
     DocumentAnalysisError,
-    LLMResponseError,
-    LLMParseError,
     WatsonxVisionError,
 )
+from .vision_llm import VisionLLM
 
 logger = logging.getLogger(__name__)
 
 
 class FraudSeverity(Enum):
     """Severity levels for fraud indicators"""
+
     NONE = "none"
     LOW = "low"
     MEDIUM = "medium"
@@ -36,8 +34,7 @@ class FraudSeverity(Enum):
 
 @dataclass
 class FraudResult:
-    """
-    Result of fraud detection analysis.
+    """Result of fraud detection analysis.
 
     Attributes:
         valid: Whether the document appears authentic
@@ -48,7 +45,9 @@ class FraudResult:
         forgery_signs: List of forgery indicators found
         severity: Overall fraud severity level
         filename: Original filename (if provided)
+
     """
+
     valid: bool
     confidence: int
     reason: str
@@ -68,13 +67,12 @@ class FraudResult:
             "field_score": self.field_score,
             "forgery_signs": self.forgery_signs,
             "severity": self.severity.value,
-            "filename": self.filename
+            "filename": self.filename,
         }
 
 
 class FraudDetector:
-    """
-    Document fraud detector using vision-based analysis.
+    """Document fraud detector using vision-based analysis.
 
     Analyzes documents for:
     - Layout inconsistencies
@@ -93,6 +91,7 @@ class FraudDetector:
         >>> result = detector.validate_document(image_base64, filename="passport.png")
         >>> if not result.valid:
         ...     print(f"Fraud detected: {result.reason}")
+
     """
 
     def __init__(
@@ -100,16 +99,16 @@ class FraudDetector:
         vision_llm: VisionLLM,
         layout_threshold: int = 70,
         field_threshold: int = 70,
-        min_confidence: int = 60
+        min_confidence: int = 60,
     ):
-        """
-        Initialize fraud detector.
+        """Initialize fraud detector.
 
         Args:
             vision_llm: VisionLLM instance for image analysis
             layout_threshold: Minimum layout score for validity (0-100)
             field_threshold: Minimum field score for validity (0-100)
             min_confidence: Minimum confidence for valid result (0-100)
+
         """
         self.llm = vision_llm
         self.layout_threshold = layout_threshold
@@ -117,13 +116,9 @@ class FraudDetector:
         self.min_confidence = min_confidence
 
     def validate_document(
-        self,
-        image_data: str,
-        filename: Optional[str] = None,
-        document_type: Optional[str] = None
+        self, image_data: str, filename: Optional[str] = None, document_type: Optional[str] = None
     ) -> FraudResult:
-        """
-        Validate document authenticity.
+        """Validate document authenticity.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -139,6 +134,7 @@ class FraudDetector:
         Example:
             >>> result = detector.validate_document(image_base64, "passport.png")
             >>> print(f"Valid: {result.valid}, Confidence: {result.confidence}%")
+
         """
         logger.debug(f"Validating document: {filename or 'unnamed'}")
 
@@ -149,13 +145,12 @@ class FraudDetector:
             logger.error(f"Vision analysis failed for {filename}: {e}")
             raise DocumentAnalysisError(
                 f"Failed to analyze document: {filename or 'unnamed'}",
-                details={"original_error": str(e), "filename": filename}
+                details={"original_error": str(e), "filename": filename},
             ) from e
         except Exception as e:
             logger.error(f"Unexpected error during document validation: {e}")
             raise DocumentAnalysisError(
-                f"Unexpected error analyzing document: {filename or 'unnamed'}",
-                details=str(e)
+                f"Unexpected error analyzing document: {filename or 'unnamed'}", details=str(e)
             ) from e
 
         # Extract scores with safe defaults
@@ -177,18 +172,18 @@ class FraudDetector:
 
         # Determine validity
         valid = (
-            raw_result.get("valid", False) and
-            layout_score >= self.layout_threshold and
-            field_score >= self.field_threshold and
-            confidence >= self.min_confidence
+            raw_result.get("valid", False)
+            and layout_score >= self.layout_threshold
+            and field_score >= self.field_threshold
+            and confidence >= self.min_confidence
         )
 
         # Determine severity
-        severity = self._calculate_severity(
-            valid, confidence, len(forgery_signs)
-        )
+        severity = self._calculate_severity(valid, confidence, len(forgery_signs))
 
-        logger.debug(f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}")
+        logger.debug(
+            f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}"
+        )
 
         return FraudResult(
             valid=valid,
@@ -198,15 +193,11 @@ class FraudDetector:
             field_score=field_score,
             forgery_signs=forgery_signs,
             severity=severity,
-            filename=filename
+            filename=filename,
         )
 
-    def validate_batch(
-        self,
-        documents: List[Dict[str, str]]
-    ) -> List[FraudResult]:
-        """
-        Validate multiple documents.
+    def validate_batch(self, documents: List[Dict[str, str]]) -> List[FraudResult]:
+        """Validate multiple documents.
 
         Args:
             documents: List of dicts with 'image_data' and optional 'filename', 'doc_type'
@@ -221,13 +212,14 @@ class FraudDetector:
             ... ]
             >>> results = detector.validate_batch(docs)
             >>> invalid_count = sum(1 for r in results if not r.valid)
+
         """
         results = []
         for doc in documents:
             result = self.validate_document(
                 image_data=doc["image_data"],
                 filename=doc.get("filename"),
-                document_type=doc.get("doc_type")
+                document_type=doc.get("doc_type"),
             )
             results.append(result)
         return results
@@ -235,13 +227,9 @@ class FraudDetector:
     # ==================== Async Methods ====================
 
     async def validate_document_async(
-        self,
-        image_data: str,
-        filename: Optional[str] = None,
-        document_type: Optional[str] = None
+        self, image_data: str, filename: Optional[str] = None, document_type: Optional[str] = None
     ) -> FraudResult:
-        """
-        Async version of validate_document.
+        """Async version of validate_document.
 
         Validate document authenticity asynchronously.
 
@@ -259,6 +247,7 @@ class FraudDetector:
         Example:
             >>> result = await detector.validate_document_async(image_base64, "passport.png")
             >>> print(f"Valid: {result.valid}, Confidence: {result.confidence}%")
+
         """
         logger.debug(f"Validating document async: {filename or 'unnamed'}")
 
@@ -268,13 +257,12 @@ class FraudDetector:
             logger.error(f"Vision analysis failed for {filename}: {e}")
             raise DocumentAnalysisError(
                 f"Failed to analyze document: {filename or 'unnamed'}",
-                details={"original_error": str(e), "filename": filename}
+                details={"original_error": str(e), "filename": filename},
             ) from e
         except Exception as e:
             logger.error(f"Unexpected error during document validation: {e}")
             raise DocumentAnalysisError(
-                f"Unexpected error analyzing document: {filename or 'unnamed'}",
-                details=str(e)
+                f"Unexpected error analyzing document: {filename or 'unnamed'}", details=str(e)
             ) from e
 
         # Extract scores with safe defaults
@@ -294,15 +282,17 @@ class FraudDetector:
         confidence = int((layout_score + field_score) / 2)
 
         valid = (
-            raw_result.get("valid", False) and
-            layout_score >= self.layout_threshold and
-            field_score >= self.field_threshold and
-            confidence >= self.min_confidence
+            raw_result.get("valid", False)
+            and layout_score >= self.layout_threshold
+            and field_score >= self.field_threshold
+            and confidence >= self.min_confidence
         )
 
         severity = self._calculate_severity(valid, confidence, len(forgery_signs))
 
-        logger.debug(f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}")
+        logger.debug(
+            f"Document {filename}: valid={valid}, confidence={confidence}, severity={severity.value}"
+        )
 
         return FraudResult(
             valid=valid,
@@ -312,16 +302,13 @@ class FraudDetector:
             field_score=field_score,
             forgery_signs=forgery_signs,
             severity=severity,
-            filename=filename
+            filename=filename,
         )
 
     async def validate_batch_async(
-        self,
-        documents: List[Dict[str, str]],
-        concurrent: bool = True
+        self, documents: List[Dict[str, str]], concurrent: bool = True
     ) -> List[FraudResult]:
-        """
-        Async version of validate_batch.
+        """Async version of validate_batch.
 
         Validate multiple documents asynchronously.
 
@@ -339,6 +326,7 @@ class FraudDetector:
             ... ]
             >>> results = await detector.validate_batch_async(docs)
             >>> invalid_count = sum(1 for r in results if not r.valid)
+
         """
         if concurrent:
             # Run all validations concurrently
@@ -346,7 +334,7 @@ class FraudDetector:
                 self.validate_document_async(
                     image_data=doc["image_data"],
                     filename=doc.get("filename"),
-                    document_type=doc.get("doc_type")
+                    document_type=doc.get("doc_type"),
                 )
                 for doc in documents
             ]
@@ -358,19 +346,15 @@ class FraudDetector:
                 result = await self.validate_document_async(
                     image_data=doc["image_data"],
                     filename=doc.get("filename"),
-                    document_type=doc.get("doc_type")
+                    document_type=doc.get("doc_type"),
                 )
                 results.append(result)
             return results
 
     def _calculate_severity(
-        self,
-        valid: bool,
-        confidence: int,
-        forgery_count: int
+        self, valid: bool, confidence: int, forgery_count: int
     ) -> FraudSeverity:
-        """
-        Calculate fraud severity based on validation results.
+        """Calculate fraud severity based on validation results.
 
         Args:
             valid: Whether document is valid
@@ -379,6 +363,7 @@ class FraudDetector:
 
         Returns:
             FraudSeverity level
+
         """
         if valid and confidence >= 90 and forgery_count == 0:
             return FraudSeverity.NONE
@@ -397,12 +382,8 @@ class FraudDetector:
 
         return FraudSeverity.MEDIUM
 
-    def generate_report(
-        self,
-        results: List[FraudResult]
-    ) -> Dict:
-        """
-        Generate summary report from validation results.
+    def generate_report(self, results: List[FraudResult]) -> Dict:
+        """Generate summary report from validation results.
 
         Args:
             results: List of FraudResult objects
@@ -414,6 +395,7 @@ class FraudDetector:
             >>> results = detector.validate_batch(documents)
             >>> report = detector.generate_report(results)
             >>> print(f"Fraud rate: {report['fraud_rate']}%")
+
         """
         total = len(results)
         valid_count = sum(1 for r in results if r.valid)
@@ -426,7 +408,7 @@ class FraudDetector:
             FraudSeverity.LOW: 0,
             FraudSeverity.MEDIUM: 0,
             FraudSeverity.HIGH: 0,
-            FraudSeverity.CRITICAL: 0
+            FraudSeverity.CRITICAL: 0,
         }
 
         for result in results:
@@ -438,16 +420,13 @@ class FraudDetector:
             "invalid_documents": invalid_count,
             "fraud_rate": round((invalid_count / total * 100) if total > 0 else 0, 2),
             "average_confidence": round(avg_confidence, 2),
-            "severity_breakdown": {
-                k.value: v for k, v in severity_counts.items()
-            },
-            "details": [r.to_dict() for r in results]
+            "severity_breakdown": {k.value: v for k, v in severity_counts.items()},
+            "details": [r.to_dict() for r in results],
         }
 
 
 class SpecializedFraudDetector(FraudDetector):
-    """
-    Specialized fraud detector with document-type-specific validation.
+    """Specialized fraud detector with document-type-specific validation.
 
     Extends base FraudDetector with additional checks for:
     - Tax returns (altered figures, fake schedules)
@@ -461,7 +440,7 @@ class SpecializedFraudDetector(FraudDetector):
         vision_llm: VisionLLM,
         layout_threshold: int = 70,
         field_threshold: int = 70,
-        min_confidence: int = 60
+        min_confidence: int = 60,
     ):
         super().__init__(vision_llm, layout_threshold, field_threshold, min_confidence)
 
@@ -470,17 +449,13 @@ class SpecializedFraudDetector(FraudDetector):
             "tax_return": self._get_tax_return_prompt(),
             "bank_statement": self._get_bank_statement_prompt(),
             "passport": self._get_passport_prompt(),
-            "drivers_license": self._get_drivers_license_prompt()
+            "drivers_license": self._get_drivers_license_prompt(),
         }
 
     def validate_document(
-        self,
-        image_data: str,
-        filename: Optional[str] = None,
-        document_type: Optional[str] = None
+        self, image_data: str, filename: Optional[str] = None, document_type: Optional[str] = None
     ) -> FraudResult:
-        """
-        Validate with document-type-specific rules if provided.
+        """Validate with document-type-specific rules if provided.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -489,6 +464,7 @@ class SpecializedFraudDetector(FraudDetector):
 
         Returns:
             FraudResult with enhanced validation
+
         """
         # Use specialized validation if document type is known
         if document_type and document_type.lower().replace(" ", "_") in self.specialized_prompts:
@@ -498,16 +474,13 @@ class SpecializedFraudDetector(FraudDetector):
         return super().validate_document(image_data, filename, document_type)
 
     def _validate_specialized(
-        self,
-        image_data: str,
-        filename: Optional[str],
-        document_type: str
+        self, image_data: str, filename: Optional[str], document_type: str
     ) -> FraudResult:
-        """
-        Perform specialized validation for specific document types.
+        """Perform specialized validation for specific document types.
 
         Raises:
             DocumentAnalysisError: If specialized analysis fails
+
         """
         doc_type_key = document_type.lower().replace(" ", "_")
         specialized_prompt = self.specialized_prompts.get(doc_type_key)
@@ -521,7 +494,7 @@ class SpecializedFraudDetector(FraudDetector):
                     image_data=image_data,
                     prompt=f"Validate this {document_type} for authenticity",
                     system_prompt=specialized_prompt,
-                    parse_json=True
+                    parse_json=True,
                 )
             else:
                 # Fall back to generic validation
@@ -530,13 +503,12 @@ class SpecializedFraudDetector(FraudDetector):
             logger.error(f"Specialized validation failed for {document_type}: {e}")
             raise DocumentAnalysisError(
                 f"Failed specialized validation for {document_type}",
-                details={"document_type": document_type, "filename": filename, "error": str(e)}
+                details={"document_type": document_type, "filename": filename, "error": str(e)},
             ) from e
         except Exception as e:
             logger.error(f"Unexpected error in specialized validation: {e}")
             raise DocumentAnalysisError(
-                f"Unexpected error in specialized validation for {document_type}",
-                details=str(e)
+                f"Unexpected error in specialized validation for {document_type}", details=str(e)
             ) from e
 
         # Convert to FraudResult with safe defaults
@@ -555,19 +527,15 @@ class SpecializedFraudDetector(FraudDetector):
             field_score=field_score,
             forgery_signs=forgery_signs,
             severity=severity,
-            filename=filename
+            filename=filename,
         )
 
     # ==================== Async Methods ====================
 
     async def validate_document_async(
-        self,
-        image_data: str,
-        filename: Optional[str] = None,
-        document_type: Optional[str] = None
+        self, image_data: str, filename: Optional[str] = None, document_type: Optional[str] = None
     ) -> FraudResult:
-        """
-        Async version with document-type-specific rules.
+        """Async version with document-type-specific rules.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -576,6 +544,7 @@ class SpecializedFraudDetector(FraudDetector):
 
         Returns:
             FraudResult with enhanced validation
+
         """
         if document_type and document_type.lower().replace(" ", "_") in self.specialized_prompts:
             return await self._validate_specialized_async(image_data, filename, document_type)
@@ -583,10 +552,7 @@ class SpecializedFraudDetector(FraudDetector):
         return await super().validate_document_async(image_data, filename, document_type)
 
     async def _validate_specialized_async(
-        self,
-        image_data: str,
-        filename: Optional[str],
-        document_type: str
+        self, image_data: str, filename: Optional[str], document_type: str
     ) -> FraudResult:
         """Async version of specialized validation."""
         doc_type_key = document_type.lower().replace(" ", "_")
@@ -600,7 +566,7 @@ class SpecializedFraudDetector(FraudDetector):
                     image_data=image_data,
                     prompt=f"Validate this {document_type} for authenticity",
                     system_prompt=specialized_prompt,
-                    parse_json=True
+                    parse_json=True,
                 )
             else:
                 result = await self.llm.validate_authenticity_async(image_data)
@@ -608,13 +574,12 @@ class SpecializedFraudDetector(FraudDetector):
             logger.error(f"Specialized validation failed for {document_type}: {e}")
             raise DocumentAnalysisError(
                 f"Failed specialized validation for {document_type}",
-                details={"document_type": document_type, "filename": filename, "error": str(e)}
+                details={"document_type": document_type, "filename": filename, "error": str(e)},
             ) from e
         except Exception as e:
             logger.error(f"Unexpected error in specialized validation: {e}")
             raise DocumentAnalysisError(
-                f"Unexpected error in specialized validation for {document_type}",
-                details=str(e)
+                f"Unexpected error in specialized validation for {document_type}", details=str(e)
             ) from e
 
         layout_score = result.get("layout_score", 0)
@@ -632,7 +597,7 @@ class SpecializedFraudDetector(FraudDetector):
             field_score=field_score,
             forgery_signs=forgery_signs,
             severity=severity,
-            filename=filename
+            filename=filename,
         )
 
     def _get_tax_return_prompt(self) -> str:

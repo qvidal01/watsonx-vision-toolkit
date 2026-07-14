@@ -1,5 +1,4 @@
-"""
-Retry Utilities for Watsonx Vision Toolkit
+"""Retry Utilities for Watsonx Vision Toolkit
 
 Provides retry logic with exponential backoff for handling transient LLM failures.
 Supports both synchronous and asynchronous operations.
@@ -9,14 +8,13 @@ import asyncio
 import logging
 import random
 import time
+from collections.abc import Awaitable
 from functools import wraps
-from typing import Awaitable, Callable, Optional, Tuple, Type, TypeVar, Union
+from typing import Callable, Optional, Tuple, Type, TypeVar
 
 from .exceptions import (
     LLMConnectionError,
-    LLMResponseError,
     LLMTimeoutError,
-    WatsonxVisionError,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,8 +31,7 @@ DEFAULT_RETRY_EXCEPTIONS: Tuple[Type[Exception], ...] = (
 
 
 class RetryConfig:
-    """
-    Configuration for retry behavior.
+    """Configuration for retry behavior.
 
     Attributes:
         max_attempts: Maximum number of retry attempts (including initial attempt)
@@ -43,6 +40,7 @@ class RetryConfig:
         exponential_base: Base for exponential backoff (delay = base_delay * exponential_base^attempt)
         jitter: Whether to add random jitter to delays
         retry_exceptions: Tuple of exception types that should trigger retry
+
     """
 
     def __init__(
@@ -62,16 +60,16 @@ class RetryConfig:
         self.retry_exceptions = retry_exceptions or DEFAULT_RETRY_EXCEPTIONS
 
     def calculate_delay(self, attempt: int) -> float:
-        """
-        Calculate delay for a given attempt number.
+        """Calculate delay for a given attempt number.
 
         Args:
             attempt: Current attempt number (0-indexed)
 
         Returns:
             Delay in seconds
+
         """
-        delay = self.base_delay * (self.exponential_base ** attempt)
+        delay = self.base_delay * (self.exponential_base**attempt)
         delay = min(delay, self.max_delay)
 
         if self.jitter:
@@ -90,8 +88,7 @@ def retry_with_backoff(
     config: Optional[RetryConfig] = None,
     on_retry: Optional[Callable[[Exception, int], None]] = None,
 ) -> Callable:
-    """
-    Decorator that retries a function with exponential backoff.
+    """Decorator that retries a function with exponential backoff.
 
     Args:
         config: RetryConfig instance (uses DEFAULT_RETRY_CONFIG if None)
@@ -111,6 +108,7 @@ def retry_with_backoff(
         >>> @retry_with_backoff(on_retry=log_retry)
         ... def call_llm():
         ...     return llm.invoke(messages)
+
     """
     if config is None:
         config = DEFAULT_RETRY_CONFIG
@@ -138,9 +136,7 @@ def retry_with_backoff(
 
                         time.sleep(delay)
                     else:
-                        logger.error(
-                            f"All {config.max_attempts} attempts failed. Last error: {e}"
-                        )
+                        logger.error(f"All {config.max_attempts} attempts failed. Last error: {e}")
 
             # Re-raise the last exception if all retries failed
             if last_exception:
@@ -161,8 +157,7 @@ def retry_llm_call(
     on_retry: Optional[Callable[[Exception, int], None]] = None,
     **kwargs,
 ) -> T:
-    """
-    Execute a function with retry logic (non-decorator version).
+    """Execute a function with retry logic (non-decorator version).
 
     Useful when you can't use a decorator or need dynamic retry behavior.
 
@@ -185,6 +180,7 @@ def retry_llm_call(
         ...     messages,
         ...     config=RetryConfig(max_attempts=5)
         ... )
+
     """
     if config is None:
         config = DEFAULT_RETRY_CONFIG
@@ -209,9 +205,7 @@ def retry_llm_call(
 
                 time.sleep(delay)
             else:
-                logger.error(
-                    f"All {config.max_attempts} attempts failed. Last error: {e}"
-                )
+                logger.error(f"All {config.max_attempts} attempts failed. Last error: {e}")
 
     if last_exception:
         raise last_exception
@@ -223,8 +217,7 @@ def async_retry_with_backoff(
     config: Optional[RetryConfig] = None,
     on_retry: Optional[Callable[[Exception, int], None]] = None,
 ) -> Callable:
-    """
-    Async decorator that retries a coroutine with exponential backoff.
+    """Async decorator that retries a coroutine with exponential backoff.
 
     Args:
         config: RetryConfig instance (uses DEFAULT_RETRY_CONFIG if None)
@@ -244,6 +237,7 @@ def async_retry_with_backoff(
         >>> @async_retry_with_backoff(on_retry=log_retry)
         ... async def call_llm():
         ...     return await llm.ainvoke(messages)
+
     """
     if config is None:
         config = DEFAULT_RETRY_CONFIG
@@ -271,9 +265,7 @@ def async_retry_with_backoff(
 
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(
-                            f"All {config.max_attempts} attempts failed. Last error: {e}"
-                        )
+                        logger.error(f"All {config.max_attempts} attempts failed. Last error: {e}")
 
             if last_exception:
                 raise last_exception
@@ -292,8 +284,7 @@ async def async_retry_llm_call(
     on_retry: Optional[Callable[[Exception, int], None]] = None,
     **kwargs,
 ) -> T:
-    """
-    Execute an async function with retry logic (non-decorator version).
+    """Execute an async function with retry logic (non-decorator version).
 
     Useful when you can't use a decorator or need dynamic retry behavior.
 
@@ -316,6 +307,7 @@ async def async_retry_llm_call(
         ...     messages,
         ...     config=RetryConfig(max_attempts=5)
         ... )
+
     """
     if config is None:
         config = DEFAULT_RETRY_CONFIG
@@ -340,9 +332,7 @@ async def async_retry_llm_call(
 
                 await asyncio.sleep(delay)
             else:
-                logger.error(
-                    f"All {config.max_attempts} attempts failed. Last error: {e}"
-                )
+                logger.error(f"All {config.max_attempts} attempts failed. Last error: {e}")
 
     if last_exception:
         raise last_exception

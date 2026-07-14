@@ -1,5 +1,4 @@
-"""
-Vision LLM Module
+"""Vision LLM Module
 
 Provides a unified interface for vision-based document analysis using various LLM providers.
 Supports IBM Watsonx AI, local Ollama models, and other compatible providers.
@@ -11,24 +10,23 @@ import base64
 import logging
 import mimetypes
 import os
-from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
+from .cache import CacheConfig, ResponseCache
 from .exceptions import (
-    LLMConnectionError,
-    LLMResponseError,
-    LLMParseError,
-    LLMTimeoutError,
     ConfigurationError,
+    LLMConnectionError,
+    LLMParseError,
+    LLMResponseError,
+    LLMTimeoutError,
 )
 from .retry import (
     RetryConfig,
-    retry_llm_call,
     async_retry_llm_call,
-    DEFAULT_RETRY_CONFIG,
+    retry_llm_call,
 )
-from .cache import CacheConfig, ResponseCache
 
 # langchain_core is a dependency of every provider extra (ollama/watsonx/...),
 # so its imports must NOT be gated behind the watsonx-only langchain_ibm import —
@@ -41,6 +39,7 @@ except ImportError:
 
 try:
     from langchain_ibm import ChatWatsonx
+
     WATSONX_AVAILABLE = True
 except ImportError:
     WATSONX_AVAILABLE = False
@@ -50,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
+
     WATSONX = "watsonx"
     OLLAMA = "ollama"
     OPENAI = "openai"
@@ -59,6 +59,7 @@ class LLMProvider(Enum):
 @dataclass
 class VisionLLMConfig:
     """Configuration for Vision LLM"""
+
     provider: LLMProvider = LLMProvider.WATSONX
     model_id: str = "meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
     api_key: Optional[str] = None
@@ -74,13 +75,8 @@ class VisionLLMConfig:
     retry_max_delay: float = 60.0
 
     @classmethod
-    def from_env(
-        cls,
-        prefix: str = "",
-        **overrides
-    ) -> "VisionLLMConfig":
-        """
-        Create configuration from environment variables.
+    def from_env(cls, prefix: str = "", **overrides) -> "VisionLLMConfig":
+        """Create configuration from environment variables.
 
         Environment variables (checked in order):
             Provider:
@@ -131,7 +127,9 @@ class VisionLLMConfig:
 
             >>> # With explicit overrides:
             >>> config = VisionLLMConfig.from_env(temperature=0.5)
+
         """
+
         def get_env(*keys: str, default: Optional[str] = None) -> Optional[str]:
             """Get first available environment variable from list of keys."""
             for key in keys:
@@ -147,20 +145,14 @@ class VisionLLMConfig:
                     return value
             return default
 
-        def get_env_bool(
-            *keys: str,
-            default: bool = True
-        ) -> bool:
+        def get_env_bool(*keys: str, default: bool = True) -> bool:
             """Get boolean from environment variable."""
             value = get_env(*keys)
             if value is None:
                 return default
             return value.lower() in ("true", "1", "yes", "on")
 
-        def get_env_int(
-            *keys: str,
-            default: int = 0
-        ) -> int:
+        def get_env_int(*keys: str, default: int = 0) -> int:
             """Get integer from environment variable."""
             value = get_env(*keys)
             if value is None:
@@ -173,10 +165,7 @@ class VisionLLMConfig:
                 )
                 return default
 
-        def get_env_float(
-            *keys: str,
-            default: float = 0.0
-        ) -> float:
+        def get_env_float(*keys: str, default: float = 0.0) -> float:
             """Get float from environment variable."""
             value = get_env(*keys)
             if value is None:
@@ -195,15 +184,14 @@ class VisionLLMConfig:
             provider = LLMProvider(provider_str.lower())
         except ValueError:
             raise ConfigurationError(
-                f"Invalid provider: {provider_str}. "
-                f"Valid options: {[p.value for p in LLMProvider]}"
+                f"Invalid provider: {provider_str}. Valid options: {[p.value for p in LLMProvider]}"
             )
 
         # Get model ID
         model_id = get_env(
             "VISION_MODEL_ID",
             "WATSONX_MODEL",
-            default="meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
+            default="meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
         )
 
         # Get provider-specific configuration
@@ -252,8 +240,7 @@ class VisionLLMConfig:
 
 
 class VisionLLM:
-    """
-    Vision-based LLM for document analysis.
+    """Vision-based LLM for document analysis.
 
     Supports multiple providers with a unified interface for:
     - Document classification
@@ -275,6 +262,7 @@ class VisionLLM:
         >>> # With caching enabled
         >>> cache_config = CacheConfig(ttl=3600, max_size=100)
         >>> llm = VisionLLM(config, cache_config=cache_config)
+
     """
 
     def __init__(
@@ -282,8 +270,7 @@ class VisionLLM:
         config: VisionLLMConfig,
         cache_config: Optional[CacheConfig] = None,
     ):
-        """
-        Initialize Vision LLM with configuration.
+        """Initialize Vision LLM with configuration.
 
         Args:
             config: VisionLLMConfig object with provider settings
@@ -293,6 +280,7 @@ class VisionLLM:
         Raises:
             ImportError: If required packages for provider are not installed
             ValueError: If configuration is invalid
+
         """
         self.config = config
         self._llm = self._initialize_llm()
@@ -313,8 +301,7 @@ class VisionLLM:
         if cache_config is not None:
             self._cache = ResponseCache(cache_config)
             logger.debug(
-                f"Cache enabled: ttl={cache_config.ttl}s, "
-                f"max_size={cache_config.max_size}"
+                f"Cache enabled: ttl={cache_config.ttl}s, max_size={cache_config.max_size}"
             )
 
     def _initialize_llm(self):
@@ -335,7 +322,7 @@ class VisionLLM:
                     "max_new_tokens": self.config.max_tokens,
                     "temperature": self.config.temperature,
                     "top_p": self.config.top_p,
-                }
+                },
             )
 
         elif self.config.provider == LLMProvider.OLLAMA:
@@ -351,19 +338,21 @@ class VisionLLM:
                 model=self.config.model_id,
                 base_url=self.config.url or "http://localhost:11434",
                 temperature=self.config.temperature,
+                # Map the configured token budget to Ollama's num_predict. Without
+                # this, ChatOllama falls back to its 128-token default and long
+                # structured outputs (e.g. the fraud 6-check JSON) get truncated.
+                # Mirrors the watsonx branch, which passes max_tokens as
+                # max_new_tokens.
+                num_predict=self.config.max_tokens,
             )
 
         else:
             raise ValueError(f"Unsupported provider: {self.config.provider}")
 
     def _create_vision_message(
-        self,
-        image_data: str,
-        prompt: str,
-        system_prompt: Optional[str] = None
+        self, image_data: str, prompt: str, system_prompt: Optional[str] = None
     ) -> List[Union[SystemMessage, HumanMessage]]:
-        """
-        Create messages for vision LLM with image and text.
+        """Create messages for vision LLM with image and text.
 
         Args:
             image_data: Base64-encoded image data URI (data:image/png;base64,...)
@@ -372,10 +361,11 @@ class VisionLLM:
 
         Returns:
             List of messages for LLM
+
         """
         content = [
             {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": image_data}}
+            {"type": "image_url", "image_url": {"url": image_data}},
         ]
 
         messages = []
@@ -393,8 +383,7 @@ class VisionLLM:
         parse_json: bool = True,
         use_cache: bool = True,
     ) -> Union[Dict, str]:
-        """
-        Analyze an image with a custom prompt.
+        """Analyze an image with a custom prompt.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -411,6 +400,7 @@ class VisionLLM:
             LLMResponseError: If LLM returns invalid response
             LLMParseError: If JSON parsing fails
             LLMTimeoutError: If request times out
+
         """
         # Check cache first
         cache_key = None
@@ -432,14 +422,13 @@ class VisionLLM:
             except TimeoutError as e:
                 logger.error(f"LLM request timed out: {e}")
                 raise LLMTimeoutError(
-                    "LLM request timed out",
-                    details={"prompt_length": len(prompt)}
+                    "LLM request timed out", details={"prompt_length": len(prompt)}
                 ) from e
             except ConnectionError as e:
                 logger.error(f"Failed to connect to LLM: {e}")
                 raise LLMConnectionError(
                     f"Failed to connect to LLM provider: {self.config.provider.value}",
-                    details=str(e)
+                    details=str(e),
                 ) from e
 
         # Execute with or without retry
@@ -452,16 +441,12 @@ class VisionLLM:
             raise  # Re-raise our custom exceptions
         except Exception as e:
             logger.error(f"LLM invocation failed: {e}")
-            raise LLMResponseError(
-                "LLM invocation failed",
-                details=str(e)
-            ) from e
+            raise LLMResponseError("LLM invocation failed", details=str(e)) from e
 
-        if response is None or not hasattr(response, 'content'):
+        if response is None or not hasattr(response, "content"):
             logger.error("LLM returned empty or invalid response")
             raise LLMResponseError(
-                "LLM returned empty or invalid response",
-                details={"response": str(response)}
+                "LLM returned empty or invalid response", details={"response": str(response)}
             )
 
         if parse_json:
@@ -472,7 +457,7 @@ class VisionLLM:
                 logger.debug(f"Raw response content: {response.content[:500]}")
                 raise LLMParseError(
                     "Failed to parse LLM response as JSON",
-                    details={"raw_content": response.content[:500], "error": str(e)}
+                    details={"raw_content": response.content[:500], "error": str(e)},
                 ) from e
         else:
             result = response.content
@@ -484,12 +469,9 @@ class VisionLLM:
         return result
 
     def classify_document(
-        self,
-        image_data: str,
-        document_types: Optional[List[str]] = None
+        self, image_data: str, document_types: Optional[List[str]] = None
     ) -> Dict[str, str]:
-        """
-        Classify a document image into predefined types.
+        """Classify a document image into predefined types.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -502,6 +484,7 @@ class VisionLLM:
         Example:
             >>> result = llm.classify_document(image_base64)
             >>> print(result['doc_type'])  # "Passport"
+
         """
         if document_types is None:
             document_types = [
@@ -515,7 +498,7 @@ class VisionLLM:
                 "Tax Return",
                 "Articles of Incorporation",
                 "Personal Financial Statement",
-                "Others"
+                "Others",
             ]
 
         types_list = "\n    * ".join(document_types)
@@ -540,17 +523,13 @@ Replace `<document type>` with one of the above options exactly as written."""
             image_data=image_data,
             prompt="Classify this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
     def extract_information(
-        self,
-        image_data: str,
-        fields: Optional[List[str]] = None,
-        date_format: str = "YYYY-MM-DD"
+        self, image_data: str, fields: Optional[List[str]] = None, date_format: str = "YYYY-MM-DD"
     ) -> Dict[str, Any]:
-        """
-        Extract structured information from a document image.
+        """Extract structured information from a document image.
 
         Args:
             image_data: Base64-encoded image data URI
@@ -564,13 +543,24 @@ Replace `<document type>` with one of the above options exactly as written."""
         Example:
             >>> result = llm.extract_information(image_base64)
             >>> print(result['name'])  # "John Doe"
+
         """
         if fields is None:
             fields = [
-                "Name", "Address", "Date of Birth (DOB)", "Gender",
-                "Document Number", "Nationality", "Issuing authority",
-                "Date of issue", "Expiry date", "SSN", "EIN",
-                "Revenue", "Expenses", "Net Income"
+                "Name",
+                "Address",
+                "Date of Birth (DOB)",
+                "Gender",
+                "Document Number",
+                "Nationality",
+                "Issuing authority",
+                "Date of issue",
+                "Expiry date",
+                "SSN",
+                "EIN",
+                "Revenue",
+                "Expenses",
+                "Net Income",
             ]
 
         fields_list = "\n ".join([f"- {field}" for field in fields])
@@ -604,15 +594,11 @@ Provide only the JSON object as the output, with no additional text."""
             image_data=image_data,
             prompt="Extract personal or business information from this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
-    def validate_authenticity(
-        self,
-        image_data: str
-    ) -> Dict[str, Any]:
-        """
-        Validate document authenticity using vision analysis.
+    def validate_authenticity(self, image_data: str) -> Dict[str, Any]:
+        """Validate document authenticity using vision analysis.
 
         Checks for:
         - Layout consistency
@@ -634,6 +620,7 @@ Provide only the JSON object as the output, with no additional text."""
             >>> result = llm.validate_authenticity(image_base64)
             >>> if not result['valid']:
             ...     print(f"Fraud detected: {result['reason']}")
+
         """
         system_prompt = """You are a document fraud detection expert. Analyze this document image for signs of forgery or manipulation.
 
@@ -658,7 +645,7 @@ Return your analysis in JSON format:
             image_data=image_data,
             prompt="Validate the authenticity of this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
     # ==================== Async Methods ====================
@@ -671,8 +658,7 @@ Return your analysis in JSON format:
         parse_json: bool = True,
         use_cache: bool = True,
     ) -> Union[Dict, str]:
-        """
-        Async version of analyze_image.
+        """Async version of analyze_image.
 
         Analyze an image with a custom prompt asynchronously.
 
@@ -694,6 +680,7 @@ Return your analysis in JSON format:
 
         Example:
             >>> result = await llm.analyze_image_async(image_data, "Describe this image")
+
         """
         # Check cache first (cache operations are synchronous but fast)
         cache_key = None
@@ -715,38 +702,31 @@ Return your analysis in JSON format:
             except TimeoutError as e:
                 logger.error(f"LLM request timed out: {e}")
                 raise LLMTimeoutError(
-                    "LLM request timed out",
-                    details={"prompt_length": len(prompt)}
+                    "LLM request timed out", details={"prompt_length": len(prompt)}
                 ) from e
             except ConnectionError as e:
                 logger.error(f"Failed to connect to LLM: {e}")
                 raise LLMConnectionError(
                     f"Failed to connect to LLM provider: {self.config.provider.value}",
-                    details=str(e)
+                    details=str(e),
                 ) from e
 
         # Execute with or without retry
         try:
             if self._retry_config:
-                response = await async_retry_llm_call(
-                    invoke_llm_async, config=self._retry_config
-                )
+                response = await async_retry_llm_call(invoke_llm_async, config=self._retry_config)
             else:
                 response = await invoke_llm_async()
         except (LLMConnectionError, LLMTimeoutError):
             raise
         except Exception as e:
             logger.error(f"LLM invocation failed: {e}")
-            raise LLMResponseError(
-                "LLM invocation failed",
-                details=str(e)
-            ) from e
+            raise LLMResponseError("LLM invocation failed", details=str(e)) from e
 
-        if response is None or not hasattr(response, 'content'):
+        if response is None or not hasattr(response, "content"):
             logger.error("LLM returned empty or invalid response")
             raise LLMResponseError(
-                "LLM returned empty or invalid response",
-                details={"response": str(response)}
+                "LLM returned empty or invalid response", details={"response": str(response)}
             )
 
         if parse_json:
@@ -757,7 +737,7 @@ Return your analysis in JSON format:
                 logger.debug(f"Raw response content: {response.content[:500]}")
                 raise LLMParseError(
                     "Failed to parse LLM response as JSON",
-                    details={"raw_content": response.content[:500], "error": str(e)}
+                    details={"raw_content": response.content[:500], "error": str(e)},
                 ) from e
         else:
             result = response.content
@@ -769,12 +749,9 @@ Return your analysis in JSON format:
         return result
 
     async def classify_document_async(
-        self,
-        image_data: str,
-        document_types: Optional[List[str]] = None
+        self, image_data: str, document_types: Optional[List[str]] = None
     ) -> Dict[str, str]:
-        """
-        Async version of classify_document.
+        """Async version of classify_document.
 
         Classify a document image into predefined types asynchronously.
 
@@ -788,6 +765,7 @@ Return your analysis in JSON format:
         Example:
             >>> result = await llm.classify_document_async(image_base64)
             >>> print(result['doc_type'])  # "Passport"
+
         """
         if document_types is None:
             document_types = [
@@ -801,7 +779,7 @@ Return your analysis in JSON format:
                 "Tax Return",
                 "Articles of Incorporation",
                 "Personal Financial Statement",
-                "Others"
+                "Others",
             ]
 
         types_list = "\n    * ".join(document_types)
@@ -826,17 +804,13 @@ Replace `<document type>` with one of the above options exactly as written."""
             image_data=image_data,
             prompt="Classify this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
     async def extract_information_async(
-        self,
-        image_data: str,
-        fields: Optional[List[str]] = None,
-        date_format: str = "YYYY-MM-DD"
+        self, image_data: str, fields: Optional[List[str]] = None, date_format: str = "YYYY-MM-DD"
     ) -> Dict[str, Any]:
-        """
-        Async version of extract_information.
+        """Async version of extract_information.
 
         Extract structured information from a document image asynchronously.
 
@@ -851,13 +825,24 @@ Replace `<document type>` with one of the above options exactly as written."""
         Example:
             >>> result = await llm.extract_information_async(image_base64)
             >>> print(result['name'])  # "John Doe"
+
         """
         if fields is None:
             fields = [
-                "Name", "Address", "Date of Birth (DOB)", "Gender",
-                "Document Number", "Nationality", "Issuing authority",
-                "Date of issue", "Expiry date", "SSN", "EIN",
-                "Revenue", "Expenses", "Net Income"
+                "Name",
+                "Address",
+                "Date of Birth (DOB)",
+                "Gender",
+                "Document Number",
+                "Nationality",
+                "Issuing authority",
+                "Date of issue",
+                "Expiry date",
+                "SSN",
+                "EIN",
+                "Revenue",
+                "Expenses",
+                "Net Income",
             ]
 
         fields_list = "\n ".join([f"- {field}" for field in fields])
@@ -891,15 +876,11 @@ Provide only the JSON object as the output, with no additional text."""
             image_data=image_data,
             prompt="Extract personal or business information from this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
-    async def validate_authenticity_async(
-        self,
-        image_data: str
-    ) -> Dict[str, Any]:
-        """
-        Async version of validate_authenticity.
+    async def validate_authenticity_async(self, image_data: str) -> Dict[str, Any]:
+        """Async version of validate_authenticity.
 
         Validate document authenticity using vision analysis asynchronously.
 
@@ -913,6 +894,7 @@ Provide only the JSON object as the output, with no additional text."""
             >>> result = await llm.validate_authenticity_async(image_base64)
             >>> if not result['valid']:
             ...     print(f"Fraud detected: {result['reason']}")
+
         """
         system_prompt = """You are a document fraud detection expert. Analyze this document image for signs of forgery or manipulation.
 
@@ -937,18 +919,18 @@ Return your analysis in JSON format:
             image_data=image_data,
             prompt="Validate the authenticity of this document",
             system_prompt=system_prompt,
-            parse_json=True
+            parse_json=True,
         )
 
     # ==================== Cache Methods ====================
 
     @property
     def cache(self) -> Optional[ResponseCache]:
-        """
-        Get the response cache instance.
+        """Get the response cache instance.
 
         Returns:
             ResponseCache instance or None if caching is disabled
+
         """
         return self._cache
 
@@ -958,8 +940,7 @@ Return your analysis in JSON format:
         return self._cache is not None and self._cache.config.enabled
 
     def cache_stats(self) -> Optional[Dict[str, Any]]:
-        """
-        Get cache statistics.
+        """Get cache statistics.
 
         Returns:
             Dictionary with cache statistics, or None if caching is disabled
@@ -967,29 +948,26 @@ Return your analysis in JSON format:
         Example:
             >>> stats = llm.cache_stats()
             >>> print(f"Hit rate: {stats['hit_rate']:.2%}")
+
         """
         if self._cache is None:
             return None
         return self._cache.stats().to_dict()
 
     def cache_clear(self) -> int:
-        """
-        Clear all cached responses.
+        """Clear all cached responses.
 
         Returns:
             Number of entries cleared, or 0 if caching is disabled
+
         """
         if self._cache is None:
             return 0
         return self._cache.clear()
 
     @staticmethod
-    def encode_image_to_base64(
-        image_path: str,
-        mime_type: Optional[str] = None
-    ) -> str:
-        """
-        Encode a local image file to base64 data URI.
+    def encode_image_to_base64(image_path: str, mime_type: Optional[str] = None) -> str:
+        """Encode a local image file to base64 data URI.
 
         Args:
             image_path: Path to image file
@@ -1001,6 +979,7 @@ Return your analysis in JSON format:
         Example:
             >>> data_uri = VisionLLM.encode_image_to_base64("document.png")
             >>> result = llm.classify_document(data_uri)
+
         """
         with open(image_path, "rb") as f:
             image_bytes = f.read()

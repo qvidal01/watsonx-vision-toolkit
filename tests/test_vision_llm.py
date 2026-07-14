@@ -1,16 +1,21 @@
 """Tests for VisionLLM module"""
 
-import pytest
 import base64
-import tempfile
 import os
 import sys
-from unittest.mock import Mock, MagicMock, patch, PropertyMock
+import tempfile
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Mock the langchain modules before importing VisionLLM
 # This simulates having the packages installed
-_mock_human_message = type('HumanMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
-_mock_system_message = type('SystemMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
+_mock_human_message = type(
+    "HumanMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
+_mock_system_message = type(
+    "SystemMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
 
 mock_langchain_ibm = MagicMock()
 mock_langchain_core = MagicMock()
@@ -22,17 +27,13 @@ mock_langchain_core_messages.HumanMessage = _mock_human_message
 mock_langchain_core_messages.SystemMessage = _mock_system_message
 mock_langchain_core_output_parsers.JsonOutputParser = MagicMock
 
-sys.modules['langchain_ibm'] = mock_langchain_ibm
-sys.modules['langchain_core'] = mock_langchain_core
-sys.modules['langchain_core.messages'] = mock_langchain_core_messages
-sys.modules['langchain_core.output_parsers'] = mock_langchain_core_output_parsers
+sys.modules["langchain_ibm"] = mock_langchain_ibm
+sys.modules["langchain_core"] = mock_langchain_core
+sys.modules["langchain_core.messages"] = mock_langchain_core_messages
+sys.modules["langchain_core.output_parsers"] = mock_langchain_core_output_parsers
 
 # Now import the module (it will use our mocks)
-from watsonx_vision.vision_llm import (
-    VisionLLM,
-    VisionLLMConfig,
-    LLMProvider
-)
+from watsonx_vision.vision_llm import LLMProvider, VisionLLM, VisionLLMConfig
 
 
 class TestLLMProvider:
@@ -77,7 +78,7 @@ class TestVisionLLMConfig:
             project_id="test-project",
             max_tokens=4000,
             temperature=0.5,
-            top_p=0.9
+            top_p=0.9,
         )
 
         assert config.provider == LLMProvider.OLLAMA
@@ -95,7 +96,7 @@ class TestVisionLLMConfig:
             model_id="meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
             api_key="ibm-cloud-key",
             url="https://us-south.ml.cloud.ibm.com",
-            project_id="my-project-id"
+            project_id="my-project-id",
         )
 
         assert config.provider == LLMProvider.WATSONX
@@ -108,13 +109,10 @@ class TestVisionLLMInitialization:
     def test_raises_without_watsonx_package(self):
         """Test that VisionLLM raises ImportError without langchain-ibm"""
         config = VisionLLMConfig(
-            provider=LLMProvider.WATSONX,
-            api_key="test",
-            url="http://test",
-            project_id="test"
+            provider=LLMProvider.WATSONX, api_key="test", url="http://test", project_id="test"
         )
 
-        with patch('watsonx_vision.vision_llm.WATSONX_AVAILABLE', False):
+        with patch("watsonx_vision.vision_llm.WATSONX_AVAILABLE", False):
             with pytest.raises(ImportError) as exc_info:
                 VisionLLM(config)
             assert "langchain-ibm is required" in str(exc_info.value)
@@ -137,7 +135,7 @@ class TestVisionLLMInitialization:
             project_id="test-project",
             max_tokens=1000,
             temperature=0.1,
-            top_p=0.2
+            top_p=0.2,
         )
 
         llm = VisionLLM(config)
@@ -150,30 +148,50 @@ class TestVisionLLMInitialization:
 
     def test_ollama_raises_without_package(self):
         """Test that Ollama provider raises ImportError without langchain-ollama"""
-        config = VisionLLMConfig(
-            provider=LLMProvider.OLLAMA,
-            model_id="llava:latest"
-        )
+        config = VisionLLMConfig(provider=LLMProvider.OLLAMA, model_id="llava:latest")
 
         # Remove the langchain_ollama module temporarily
-        with patch.dict(sys.modules, {'langchain_ollama': None}):
+        with patch.dict(sys.modules, {"langchain_ollama": None}):
             with pytest.raises(ImportError) as exc_info:
                 VisionLLM(config)
             assert "langchain-ollama is required" in str(exc_info.value)
+
+    def test_ollama_maps_max_tokens_to_num_predict(self):
+        """Ollama ChatOllama must receive num_predict from config.max_tokens.
+
+        Regression: without this, ChatOllama falls back to its 128-token default
+        and long structured outputs (e.g. the fraud 6-check JSON) get truncated.
+        """
+        mock_chat_ollama = MagicMock()
+        mock_module = MagicMock()
+        mock_module.ChatOllama = mock_chat_ollama
+        with patch.dict(sys.modules, {"langchain_ollama": mock_module}):
+            # A non-default budget proves num_predict is mapped from config,
+            # not a coincidental default.
+            config = VisionLLMConfig(
+                provider=LLMProvider.OLLAMA,
+                model_id="llava:latest",
+                url="http://ollama:11434",
+                max_tokens=4096,
+            )
+            VisionLLM(config)
+
+        mock_chat_ollama.assert_called_once()
+        kwargs = mock_chat_ollama.call_args.kwargs
+        assert kwargs.get("num_predict") == 4096
+        assert kwargs.get("model") == "llava:latest"
+        assert kwargs.get("base_url") == "http://ollama:11434"
 
 
 def create_mock_vision_llm():
     """Helper to create a mocked VisionLLM instance"""
     # Create fresh mocks for each instance to avoid cross-test contamination
     mock_llm_instance = Mock()
-    mock_llm_instance.invoke = MagicMock(return_value=Mock(content='{}'))
+    mock_llm_instance.invoke = MagicMock(return_value=Mock(content="{}"))
     mock_langchain_ibm.ChatWatsonx.return_value = mock_llm_instance
 
     config = VisionLLMConfig(
-        provider=LLMProvider.WATSONX,
-        api_key="test",
-        url="http://test",
-        project_id="test"
+        provider=LLMProvider.WATSONX, api_key="test", url="http://test", project_id="test"
     )
     llm = VisionLLM(config)
 
@@ -195,8 +213,7 @@ class TestVisionLLMMessageCreation:
         llm = create_mock_vision_llm()
 
         messages = llm._create_vision_message(
-            image_data="data:image/png;base64,abc123",
-            prompt="Describe this image"
+            image_data="data:image/png;base64,abc123", prompt="Describe this image"
         )
 
         assert len(messages) == 1
@@ -213,7 +230,7 @@ class TestVisionLLMMessageCreation:
         messages = llm._create_vision_message(
             image_data="data:image/png;base64,abc123",
             prompt="Classify this document",
-            system_prompt="You are a document classifier"
+            system_prompt="You are a document classifier",
         )
 
         assert len(messages) == 2
@@ -233,9 +250,7 @@ class TestVisionLLMAnalyzeImage:
         llm._parser.parse.return_value = {"result": "test"}
 
         result = llm.analyze_image(
-            image_data="data:image/png;base64,abc",
-            prompt="Analyze this",
-            parse_json=True
+            image_data="data:image/png;base64,abc", prompt="Analyze this", parse_json=True
         )
 
         assert result == {"result": "test"}
@@ -248,9 +263,7 @@ class TestVisionLLMAnalyzeImage:
         llm._llm.invoke.return_value = Mock(content="Raw text response")
 
         result = llm.analyze_image(
-            image_data="data:image/png;base64,abc",
-            prompt="Describe this",
-            parse_json=False
+            image_data="data:image/png;base64,abc", prompt="Describe this", parse_json=False
         )
 
         assert result == "Raw text response"
@@ -265,7 +278,7 @@ class TestVisionLLMAnalyzeImage:
             image_data="data:image/png;base64,abc",
             prompt="Test prompt",
             system_prompt="Test system prompt",
-            parse_json=True
+            parse_json=True,
         )
 
         # Verify invoke was called (message creation includes system prompt)
@@ -280,9 +293,7 @@ class TestVisionLLMClassifyDocument:
         llm = create_mock_vision_llm()
         llm._parser.parse.return_value = {"doc_type": "Passport"}
 
-        result = llm.classify_document(
-            image_data="data:image/png;base64,abc"
-        )
+        result = llm.classify_document(image_data="data:image/png;base64,abc")
 
         assert result == {"doc_type": "Passport"}
         llm._llm.invoke.assert_called_once()
@@ -295,8 +306,7 @@ class TestVisionLLMClassifyDocument:
         custom_types = ["Invoice", "Receipt", "Contract", "Other"]
 
         result = llm.classify_document(
-            image_data="data:image/png;base64,abc",
-            document_types=custom_types
+            image_data="data:image/png;base64,abc", document_types=custom_types
         )
 
         assert result == {"doc_type": "Invoice"}
@@ -306,9 +316,7 @@ class TestVisionLLMClassifyDocument:
         llm = create_mock_vision_llm()
         llm._parser.parse.return_value = {"doc_type": "Others"}
 
-        result = llm.classify_document(
-            image_data="data:image/png;base64,abc"
-        )
+        result = llm.classify_document(image_data="data:image/png;base64,abc")
 
         assert result["doc_type"] == "Others"
 
@@ -319,14 +327,9 @@ class TestVisionLLMExtractInformation:
     def test_extract_information_default_fields(self):
         """Test extracting information with default fields"""
         llm = create_mock_vision_llm()
-        llm._parser.parse.return_value = {
-            "name": "John Doe",
-            "dob": "1990-01-15"
-        }
+        llm._parser.parse.return_value = {"name": "John Doe", "dob": "1990-01-15"}
 
-        result = llm.extract_information(
-            image_data="data:image/png;base64,abc"
-        )
+        result = llm.extract_information(image_data="data:image/png;base64,abc")
 
         assert result["name"] == "John Doe"
         assert result["dob"] == "1990-01-15"
@@ -334,16 +337,12 @@ class TestVisionLLMExtractInformation:
     def test_extract_information_custom_fields(self):
         """Test extracting information with custom fields"""
         llm = create_mock_vision_llm()
-        llm._parser.parse.return_value = {
-            "company_name": "ACME Corp",
-            "ein": "12-3456789"
-        }
+        llm._parser.parse.return_value = {"company_name": "ACME Corp", "ein": "12-3456789"}
 
         custom_fields = ["Company Name", "EIN", "Address"]
 
         result = llm.extract_information(
-            image_data="data:image/png;base64,abc",
-            fields=custom_fields
+            image_data="data:image/png;base64,abc", fields=custom_fields
         )
 
         assert result["company_name"] == "ACME Corp"
@@ -354,10 +353,7 @@ class TestVisionLLMExtractInformation:
         llm = create_mock_vision_llm()
         llm._parser.parse.return_value = {"dob": "01/15/1990"}
 
-        llm.extract_information(
-            image_data="data:image/png;base64,abc",
-            date_format="MM/DD/YYYY"
-        )
+        llm.extract_information(image_data="data:image/png;base64,abc", date_format="MM/DD/YYYY")
 
         # Verify the method was called (format is passed in system prompt)
         llm._llm.invoke.assert_called_once()
@@ -374,12 +370,10 @@ class TestVisionLLMValidateAuthenticity:
             "reason": "Document appears authentic",
             "layout_score": 90,
             "field_score": 85,
-            "forgery_signs": []
+            "forgery_signs": [],
         }
 
-        result = llm.validate_authenticity(
-            image_data="data:image/png;base64,abc"
-        )
+        result = llm.validate_authenticity(image_data="data:image/png;base64,abc")
 
         assert result["valid"] is True
         assert result["layout_score"] == 90
@@ -394,12 +388,10 @@ class TestVisionLLMValidateAuthenticity:
             "reason": "SAMPLE watermark detected",
             "layout_score": 30,
             "field_score": 40,
-            "forgery_signs": ["SAMPLE watermark", "Font inconsistency"]
+            "forgery_signs": ["SAMPLE watermark", "Font inconsistency"],
         }
 
-        result = llm.validate_authenticity(
-            image_data="data:image/png;base64,abc"
-        )
+        result = llm.validate_authenticity(image_data="data:image/png;base64,abc")
 
         assert result["valid"] is False
         assert result["layout_score"] == 30
@@ -412,7 +404,7 @@ class TestVisionLLMEncodeImage:
     def test_encode_png_image(self):
         """Test encoding a PNG image"""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            png_data = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+            png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
             f.write(png_data)
             f.flush()
             temp_path = f.name
@@ -430,7 +422,7 @@ class TestVisionLLMEncodeImage:
     def test_encode_jpeg_image(self):
         """Test encoding a JPEG image"""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            jpeg_data = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            jpeg_data = b"\xff\xd8\xff\xe0" + b"\x00" * 100
             f.write(jpeg_data)
             f.flush()
             temp_path = f.name
@@ -444,15 +436,12 @@ class TestVisionLLMEncodeImage:
     def test_encode_with_explicit_mime_type(self):
         """Test encoding with explicit MIME type"""
         with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as f:
-            f.write(b'test data')
+            f.write(b"test data")
             f.flush()
             temp_path = f.name
 
         try:
-            result = VisionLLM.encode_image_to_base64(
-                temp_path,
-                mime_type="image/webp"
-            )
+            result = VisionLLM.encode_image_to_base64(temp_path, mime_type="image/webp")
             assert result.startswith("data:image/webp;base64,")
         finally:
             os.unlink(temp_path)
@@ -460,7 +449,7 @@ class TestVisionLLMEncodeImage:
     def test_encode_unknown_extension_defaults_to_png(self):
         """Test that unknown extensions default to image/png"""
         with tempfile.NamedTemporaryFile(suffix=".unknown", delete=False) as f:
-            f.write(b'test data')
+            f.write(b"test data")
             f.flush()
             temp_path = f.name
 
@@ -478,7 +467,7 @@ class TestVisionLLMEncodeImage:
     def test_encode_gif_image(self):
         """Test encoding a GIF image"""
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
-            gif_data = b'GIF89a' + b'\x00' * 100
+            gif_data = b"GIF89a" + b"\x00" * 100
             f.write(gif_data)
             f.flush()
             temp_path = f.name
@@ -495,20 +484,14 @@ class TestVisionLLMOllamaProvider:
 
     def test_ollama_initialization_with_default_url(self):
         """Test Ollama initialization uses default URL if not provided"""
-        config = VisionLLMConfig(
-            provider=LLMProvider.OLLAMA,
-            model_id="llava:latest",
-            url=None
-        )
+        config = VisionLLMConfig(provider=LLMProvider.OLLAMA, model_id="llava:latest", url=None)
         # Config stores None, but initialization would use default
         assert config.url is None
 
     def test_ollama_initialization_with_custom_url(self):
         """Test Ollama initialization with custom URL"""
         config = VisionLLMConfig(
-            provider=LLMProvider.OLLAMA,
-            model_id="llava:latest",
-            url="http://ai-server:11434"
+            provider=LLMProvider.OLLAMA, model_id="llava:latest", url="http://ai-server:11434"
         )
         assert config.url == "http://ai-server:11434"
 
@@ -517,18 +500,17 @@ class TestVisionLLMOllamaProvider:
         mock_ollama = MagicMock()
         mock_ollama.ChatOllama = MagicMock(return_value=Mock())
 
-        with patch.dict(sys.modules, {'langchain_ollama': mock_ollama}):
+        with patch.dict(sys.modules, {"langchain_ollama": mock_ollama}):
             config = VisionLLMConfig(
-                provider=LLMProvider.OLLAMA,
-                model_id="llava:latest",
-                url="http://localhost:11434"
+                provider=LLMProvider.OLLAMA, model_id="llava:latest", url="http://localhost:11434"
             )
-            llm = VisionLLM(config)
+            VisionLLM(config)
 
             mock_ollama.ChatOllama.assert_called_once_with(
                 model="llava:latest",
                 base_url="http://localhost:11434",
-                temperature=0.0
+                temperature=0.0,
+                num_predict=2000,  # default max_tokens, mapped to Ollama's budget
             )
 
 
@@ -540,7 +522,7 @@ class TestVisionLLMEdgeCases:
         llm = create_mock_vision_llm()
         llm._parser.parse.return_value = {"doc_type": "Unknown"}
 
-        result = llm.classify_document(image_data="")
+        llm.classify_document(image_data="")
 
         # Should still call the LLM (validation is not done at this level)
         llm._llm.invoke.assert_called_once()

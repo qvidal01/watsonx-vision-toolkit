@@ -1,20 +1,14 @@
 """Tests for DecisionEngine module"""
 
-import pytest
-from datetime import datetime
+from watsonx_vision.cross_validator import Inconsistency, InconsistencySeverity, ValidationResult
 from watsonx_vision.decision_engine import (
-    DecisionEngine,
-    LoanDecisionEngine,
+    CriterionResult,
     Decision,
+    DecisionEngine,
     DecisionStatus,
-    CriterionResult
+    LoanDecisionEngine,
 )
 from watsonx_vision.fraud_detector import FraudResult, FraudSeverity
-from watsonx_vision.cross_validator import (
-    ValidationResult,
-    Inconsistency,
-    InconsistencySeverity
-)
 
 
 class TestCriterionResult:
@@ -23,11 +17,7 @@ class TestCriterionResult:
     def test_weighted_score(self):
         """Test weighted score calculation"""
         result = CriterionResult(
-            name="test_criterion",
-            passed=True,
-            score=80,
-            weight=0.5,
-            details="Test passed"
+            name="test_criterion", passed=True, score=80, weight=0.5, details="Test passed"
         )
 
         assert result.weighted_score() == 40.0
@@ -43,7 +33,7 @@ class TestDecision:
             overall_score=85.0,
             criteria_results=[],
             reasons=["All criteria passed"],
-            recommendations=["Proceed with processing"]
+            recommendations=["Proceed with processing"],
         )
 
         assert decision.status == DecisionStatus.APPROVED
@@ -54,11 +44,9 @@ class TestDecision:
         decision = Decision(
             status=DecisionStatus.REJECTED,
             overall_score=35.0,
-            criteria_results=[
-                CriterionResult("fraud", False, 20, 0.4, "Failed")
-            ],
+            criteria_results=[CriterionResult("fraud", False, 20, 0.4, "Failed")],
             reasons=["Fraud detected"],
-            recommendations=["Reject application"]
+            recommendations=["Reject application"],
         )
 
         result = decision.to_dict()
@@ -74,7 +62,7 @@ class TestDecision:
             overall_score=90.0,
             criteria_results=[],
             reasons=[],
-            recommendations=[]
+            recommendations=[],
         )
 
         summary = decision.summary()
@@ -87,10 +75,7 @@ class TestDecisionEngine:
 
     def test_engine_initialization(self):
         """Test initializing DecisionEngine"""
-        engine = DecisionEngine(
-            approval_threshold=80.0,
-            rejection_threshold=30.0
-        )
+        engine = DecisionEngine(approval_threshold=80.0, rejection_threshold=30.0)
 
         assert engine.approval_threshold == 80.0
         assert engine.rejection_threshold == 30.0
@@ -100,9 +85,7 @@ class TestDecisionEngine:
         engine = DecisionEngine()
 
         engine.add_criterion(
-            "test_criterion",
-            weight=0.5,
-            evaluator=lambda d: d.get("value", 0) > 100
+            "test_criterion", weight=0.5, evaluator=lambda d: d.get("value", 0) > 100
         )
 
         assert "test_criterion" in engine._custom_criteria
@@ -132,13 +115,10 @@ class TestDecisionEngine:
             inconsistencies=[],
             matched_fields=["name", "dob"],
             summary="All data consistent",
-            confidence=95
+            confidence=95,
         )
 
-        decision = engine.decide(
-            fraud_results=fraud_results,
-            validation_result=validation_result
-        )
+        decision = engine.decide(fraud_results=fraud_results, validation_result=validation_result)
 
         assert decision.status == DecisionStatus.APPROVED
         assert decision.overall_score >= 75
@@ -157,25 +137,25 @@ class TestDecisionEngine:
 
     def test_decide_with_failing_cross_validation(self):
         """Test decision with failing cross-validation"""
-        engine = DecisionEngine(
-            approval_threshold=75.0,
-            rejection_threshold=40.0
-        )
+        engine = DecisionEngine(approval_threshold=75.0, rejection_threshold=40.0)
 
         validation_result = ValidationResult(
             passed=False,
             total_inconsistencies=2,
             inconsistencies=[
                 Inconsistency(
-                    "ssn", "123-45-6789", "987-65-4321",
-                    "Application", "Tax Return",
+                    "ssn",
+                    "123-45-6789",
+                    "987-65-4321",
+                    "Application",
+                    "Tax Return",
                     InconsistencySeverity.CRITICAL,
-                    "SSN mismatch"
+                    "SSN mismatch",
                 ),
             ],
             matched_fields=["name"],
             summary="Critical inconsistency in SSN",
-            confidence=30
+            confidence=30,
         )
 
         decision = engine.decide(validation_result=validation_result)
@@ -187,9 +167,7 @@ class TestDecisionEngine:
         engine = DecisionEngine(custom_criteria_weight=0.5)
 
         engine.add_criterion(
-            "minimum_income",
-            weight=1.0,
-            evaluator=lambda d: d.get("income", 0) >= 50000
+            "minimum_income", weight=1.0, evaluator=lambda d: d.get("income", 0) >= 50000
         )
 
         # Test passing custom criteria
@@ -198,7 +176,9 @@ class TestDecisionEngine:
 
         # Test failing custom criteria
         decision = engine.decide(custom_data={"income": 25000})
-        assert any(cr.name == "minimum_income" and not cr.passed for cr in decision.criteria_results)
+        assert any(
+            cr.name == "minimum_income" and not cr.passed for cr in decision.criteria_results
+        )
 
 
 class TestLoanDecisionEngine:
@@ -206,11 +186,7 @@ class TestLoanDecisionEngine:
 
     def test_loan_engine_initialization(self):
         """Test initializing LoanDecisionEngine"""
-        engine = LoanDecisionEngine(
-            min_age=21,
-            min_income=40000,
-            max_dti=0.40
-        )
+        engine = LoanDecisionEngine(min_age=21, min_income=40000, max_dti=0.40)
 
         assert engine.min_age == 21
         assert engine.min_income == 40000
@@ -224,8 +200,7 @@ class TestLoanDecisionEngine:
         decision = engine.decide(custom_data={"age": 25})
 
         age_result = next(
-            (cr for cr in decision.criteria_results if cr.name == "age_verification"),
-            None
+            (cr for cr in decision.criteria_results if cr.name == "age_verification"), None
         )
         assert age_result is not None
         assert age_result.passed is True
@@ -237,8 +212,7 @@ class TestLoanDecisionEngine:
         decision = engine.decide(custom_data={"age": 16})
 
         age_result = next(
-            (cr for cr in decision.criteria_results if cr.name == "age_verification"),
-            None
+            (cr for cr in decision.criteria_results if cr.name == "age_verification"), None
         )
         assert age_result is not None
         assert age_result.passed is False
@@ -247,16 +221,15 @@ class TestLoanDecisionEngine:
         """Test DTI ratio calculation"""
         engine = LoanDecisionEngine(max_dti=0.43)
 
-        decision = engine.decide(custom_data={
-            "monthly_debt": 1500,
-            "monthly_income": 5000,  # DTI = 0.30
-            "age": 30
-        })
-
-        dti_result = next(
-            (cr for cr in decision.criteria_results if cr.name == "dti_ratio"),
-            None
+        decision = engine.decide(
+            custom_data={
+                "monthly_debt": 1500,
+                "monthly_income": 5000,  # DTI = 0.30
+                "age": 30,
+            }
         )
+
+        dti_result = next((cr for cr in decision.criteria_results if cr.name == "dti_ratio"), None)
         assert dti_result is not None
         assert dti_result.passed is True
 
@@ -266,4 +239,4 @@ class TestLoanDecisionEngine:
 
         assert engine.calculate_dti(1500, 5000) == 0.3
         assert engine.calculate_dti(2150, 5000) == 0.43
-        assert engine.calculate_dti(0, 0) == float('inf')
+        assert engine.calculate_dti(0, 0) == float("inf")

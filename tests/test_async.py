@@ -1,15 +1,19 @@
 """Tests for async functionality"""
 
-import asyncio
-import sys
-import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-
 # Mock the langchain modules before importing anything that uses them
 import json
+import sys
+from unittest.mock import AsyncMock, MagicMock, Mock
 
-_mock_human_message = type('HumanMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
-_mock_system_message = type('SystemMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
+import pytest
+
+_mock_human_message = type(
+    "HumanMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
+_mock_system_message = type(
+    "SystemMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
+
 
 # Create a mock JsonOutputParser that actually parses JSON
 class MockJsonOutputParser:
@@ -25,6 +29,7 @@ class MockJsonOutputParser:
             content = content[start:end].strip()
         return json.loads(content)
 
+
 mock_langchain_ibm = MagicMock()
 mock_langchain_core = MagicMock()
 mock_langchain_core_messages = MagicMock()
@@ -34,19 +39,19 @@ mock_langchain_core_messages.HumanMessage = _mock_human_message
 mock_langchain_core_messages.SystemMessage = _mock_system_message
 mock_langchain_core_output_parsers.JsonOutputParser = MockJsonOutputParser
 
-sys.modules['langchain_ibm'] = mock_langchain_ibm
-sys.modules['langchain_core'] = mock_langchain_core
-sys.modules['langchain_core.messages'] = mock_langchain_core_messages
-sys.modules['langchain_core.output_parsers'] = mock_langchain_core_output_parsers
+sys.modules["langchain_ibm"] = mock_langchain_ibm
+sys.modules["langchain_core"] = mock_langchain_core
+sys.modules["langchain_core.messages"] = mock_langchain_core_messages
+sys.modules["langchain_core.output_parsers"] = mock_langchain_core_output_parsers
 
-from watsonx_vision.retry import (
-    RetryConfig,
-    async_retry_with_backoff,
-    async_retry_llm_call,
-)
 from watsonx_vision.exceptions import (
     LLMConnectionError,
     LLMTimeoutError,
+)
+from watsonx_vision.retry import (
+    RetryConfig,
+    async_retry_llm_call,
+    async_retry_with_backoff,
 )
 
 
@@ -70,11 +75,13 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_retry_on_connection_error(self):
         """Test async retry on connection error"""
-        mock_func = AsyncMock(side_effect=[
-            LLMConnectionError("Connection failed"),
-            LLMConnectionError("Connection failed"),
-            "success"
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                LLMConnectionError("Connection failed"),
+                LLMConnectionError("Connection failed"),
+                "success",
+            ]
+        )
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -90,10 +97,7 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_retry_on_timeout_error(self):
         """Test async retry on timeout error"""
-        mock_func = AsyncMock(side_effect=[
-            LLMTimeoutError("Timeout"),
-            "success"
-        ])
+        mock_func = AsyncMock(side_effect=[LLMTimeoutError("Timeout"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -141,11 +145,9 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_on_retry_callback(self):
         """Test on_retry callback is called in async"""
-        mock_func = AsyncMock(side_effect=[
-            LLMConnectionError("Fail 1"),
-            LLMConnectionError("Fail 2"),
-            "success"
-        ])
+        mock_func = AsyncMock(
+            side_effect=[LLMConnectionError("Fail 1"), LLMConnectionError("Fail 2"), "success"]
+        )
         callback = Mock()
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
@@ -184,8 +186,7 @@ class TestAsyncRetryLLMCall:
         mock_func = AsyncMock(return_value="success")
 
         result = await async_retry_llm_call(
-            mock_func,
-            config=RetryConfig(max_attempts=3, base_delay=0.01)
+            mock_func, config=RetryConfig(max_attempts=3, base_delay=0.01)
         )
 
         assert result == "success"
@@ -194,10 +195,7 @@ class TestAsyncRetryLLMCall:
     @pytest.mark.asyncio
     async def test_retry_with_args(self):
         """Test async retry with positional arguments"""
-        mock_func = AsyncMock(side_effect=[
-            LLMConnectionError("Fail"),
-            "success"
-        ])
+        mock_func = AsyncMock(side_effect=[LLMConnectionError("Fail"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -210,16 +208,11 @@ class TestAsyncRetryLLMCall:
     @pytest.mark.asyncio
     async def test_retry_with_kwargs(self):
         """Test async retry with keyword arguments"""
-        mock_func = AsyncMock(side_effect=[
-            LLMConnectionError("Fail"),
-            "success"
-        ])
+        mock_func = AsyncMock(side_effect=[LLMConnectionError("Fail"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
-        result = await async_retry_llm_call(
-            mock_func, key1="val1", config=config, key2="val2"
-        )
+        result = await async_retry_llm_call(mock_func, key1="val1", config=config, key2="val2")
 
         assert result == "success"
         mock_func.assert_called_with(key1="val1", key2="val2")
@@ -273,10 +266,7 @@ class TestVisionLLMAsync:
         )
         llm = VisionLLM(config)
 
-        result = await llm.analyze_image_async(
-            "data:image/png;base64,abc123",
-            "Test prompt"
-        )
+        result = await llm.analyze_image_async("data:image/png;base64,abc123", "Test prompt")
 
         assert result == {"result": "test"}
         mock_internal_llm.ainvoke.assert_called_once()
@@ -303,9 +293,7 @@ class TestVisionLLMAsync:
         )
         llm = VisionLLM(config)
 
-        result = await llm.classify_document_async(
-            "data:image/png;base64,abc123"
-        )
+        result = await llm.classify_document_async("data:image/png;base64,abc123")
 
         assert result["doc_type"] == "Passport"
 
@@ -331,9 +319,7 @@ class TestVisionLLMAsync:
         )
         llm = VisionLLM(config)
 
-        result = await llm.extract_information_async(
-            "data:image/png;base64,abc123"
-        )
+        result = await llm.extract_information_async("data:image/png;base64,abc123")
 
         assert result["name"] == "John Doe"
         assert result["dob"] == "1990-01-15"
@@ -346,8 +332,8 @@ class TestVisionLLMAsync:
 
         mock_internal_llm = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = '''{"valid": true, "reason": "Document appears authentic",
-            "layout_score": 90, "field_score": 85, "forgery_signs": []}'''
+        mock_response.content = """{"valid": true, "reason": "Document appears authentic",
+            "layout_score": 90, "field_score": 85, "forgery_signs": []}"""
         mock_internal_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         mock_langchain_ibm.ChatWatsonx.return_value = mock_internal_llm
@@ -361,9 +347,7 @@ class TestVisionLLMAsync:
         )
         llm = VisionLLM(config)
 
-        result = await llm.validate_authenticity_async(
-            "data:image/png;base64,abc123"
-        )
+        result = await llm.validate_authenticity_async("data:image/png;base64,abc123")
 
         assert result["valid"] is True
         assert result["layout_score"] == 90
@@ -376,13 +360,13 @@ class TestFraudDetectorAsync:
     async def test_validate_document_async(self):
         """Test async document validation"""
         from watsonx_vision import VisionLLM, VisionLLMConfig
+        from watsonx_vision.fraud_detector import FraudDetector
         from watsonx_vision.vision_llm import LLMProvider
-        from watsonx_vision.fraud_detector import FraudDetector, FraudSeverity
 
         mock_internal_llm = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = '''{"valid": true, "reason": "Document is valid",
-            "layout_score": 85, "field_score": 90, "forgery_signs": []}'''
+        mock_response.content = """{"valid": true, "reason": "Document is valid",
+            "layout_score": 85, "field_score": 90, "forgery_signs": []}"""
         mock_internal_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         mock_langchain_ibm.ChatWatsonx.return_value = mock_internal_llm
@@ -398,8 +382,7 @@ class TestFraudDetectorAsync:
         detector = FraudDetector(vision_llm)
 
         result = await detector.validate_document_async(
-            "data:image/png;base64,abc123",
-            filename="test.png"
+            "data:image/png;base64,abc123", filename="test.png"
         )
 
         assert result.valid is True
@@ -411,13 +394,13 @@ class TestFraudDetectorAsync:
     async def test_validate_batch_async_concurrent(self):
         """Test async batch validation runs concurrently"""
         from watsonx_vision import VisionLLM, VisionLLMConfig
-        from watsonx_vision.vision_llm import LLMProvider
         from watsonx_vision.fraud_detector import FraudDetector
+        from watsonx_vision.vision_llm import LLMProvider
 
         mock_internal_llm = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = '''{"valid": true, "reason": "Valid",
-            "layout_score": 80, "field_score": 80, "forgery_signs": []}'''
+        mock_response.content = """{"valid": true, "reason": "Valid",
+            "layout_score": 80, "field_score": 80, "forgery_signs": []}"""
         mock_internal_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         mock_langchain_ibm.ChatWatsonx.return_value = mock_internal_llm
@@ -455,13 +438,13 @@ class TestCrossValidatorAsync:
         # Create mock LLM and pass it directly
         mock_llm = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = '''{
+        mock_response.content = """{
             "passed": true,
             "inconsistencies": [],
             "matched_fields": ["name", "dob"],
             "summary": "All fields match",
             "confidence": 95
-        }'''
+        }"""
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         # Pass mock LLM directly to avoid import issues
@@ -469,9 +452,7 @@ class TestCrossValidatorAsync:
 
         result = await validator.validate_async(
             application_data={"name": "John Doe", "dob": "1990-01-15"},
-            document_data=[
-                {"doc_type": "Passport", "name": "John Doe", "dob": "1990-01-15"}
-            ]
+            document_data=[{"doc_type": "Passport", "name": "John Doe", "dob": "1990-01-15"}],
         )
 
         assert result.passed is True
@@ -485,13 +466,13 @@ class TestCrossValidatorAsync:
 
         mock_llm = MagicMock()
         mock_response = MagicMock()
-        mock_response.content = '''{
+        mock_response.content = """{
             "passed": true,
             "inconsistencies": [],
             "matched_fields": ["name"],
             "summary": "Match",
             "confidence": 90
-        }'''
+        }"""
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         validator = CrossValidator(llm=mock_llm, retry_enabled=False)
@@ -499,12 +480,12 @@ class TestCrossValidatorAsync:
         packages = [
             {
                 "application_data": {"name": "John"},
-                "document_data": [{"doc_type": "ID", "name": "John"}]
+                "document_data": [{"doc_type": "ID", "name": "John"}],
             },
             {
                 "application_data": {"name": "Jane"},
-                "document_data": [{"doc_type": "ID", "name": "Jane"}]
-            }
+                "document_data": [{"doc_type": "ID", "name": "Jane"}],
+            },
         ]
 
         results = await validator.validate_batch_async(packages)

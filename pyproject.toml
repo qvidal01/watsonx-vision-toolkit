@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "watsonx-vision-toolkit"
-version = "0.2.0"
+version = "0.2.1"
 description = "Reusable Python toolkit for vision-based document analysis using IBM Watsonx AI or Ollama"
 readme = "README.md"
 license = "MIT"
@@ -100,8 +100,15 @@ line-length = 100
 target-version = "py39"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "D", "UP", "B", "C4"]
-ignore = ["D100", "D104", "D107"]
+# Enforced: pycodestyle (E/W), pyflakes (F), import sorting (I), naming (N),
+# comprehensions (C4), bugbear (B). Docstring completeness/style (D) and pep585
+# modernization (UP) are deferred as pre-existing repo-wide debt (tracked issue).
+select = ["E", "F", "W", "I", "N", "C4", "B"]
+ignore = [
+    "E501",  # line-too-long — mostly docstring example lines
+    "E402",  # intentional late imports in tests after sys.path setup
+    "B904",  # exception chaining — pre-existing debt in cli.py (tracked issue)
+]
 
 [tool.mypy]
 python_version = "3.9"

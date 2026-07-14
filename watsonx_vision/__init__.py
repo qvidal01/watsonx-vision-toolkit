@@ -1,5 +1,4 @@
-"""
-Watsonx Vision Toolkit
+"""Watsonx Vision Toolkit
 
 A reusable Python package for vision-based document analysis, fraud detection,
 and multi-document validation using IBM Watsonx AI or compatible LLM providers.
@@ -7,36 +6,36 @@ and multi-document validation using IBM Watsonx AI or compatible LLM providers.
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "AIQSO - Quinn Vidal"
 __email__ = "quinn@aiqso.io"
 
-from .vision_llm import LLMProvider, VisionLLM, VisionLLMConfig
-from .fraud_detector import FraudDetector, FraudResult
-from .cross_validator import CrossValidator, ValidationResult
-from .decision_engine import DecisionEngine, Decision
-from .exceptions import (
-    WatsonxVisionError,
-    LLMConnectionError,
-    LLMResponseError,
-    LLMParseError,
-    LLMTimeoutError,
-    DocumentAnalysisError,
-    ValidationError,
-    ConfigurationError,
-)
-from .retry import (
-    RetryConfig,
-    retry_with_backoff,
-    retry_llm_call,
-    async_retry_with_backoff,
-    async_retry_llm_call,
-)
 from .cache import (
     CacheConfig,
-    ResponseCache,
     CacheStats,
+    ResponseCache,
 )
+from .cross_validator import CrossValidator, ValidationResult
+from .decision_engine import Decision, DecisionEngine
+from .exceptions import (
+    ConfigurationError,
+    DocumentAnalysisError,
+    LLMConnectionError,
+    LLMParseError,
+    LLMResponseError,
+    LLMTimeoutError,
+    ValidationError,
+    WatsonxVisionError,
+)
+from .fraud_detector import FraudDetector, FraudResult
+from .retry import (
+    RetryConfig,
+    async_retry_llm_call,
+    async_retry_with_backoff,
+    retry_llm_call,
+    retry_with_backoff,
+)
+from .vision_llm import LLMProvider, VisionLLM, VisionLLMConfig
 
 __all__ = [
     # Core classes

@@ -1,19 +1,19 @@
 """Tests for retry utilities"""
 
-import time
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from watsonx_vision.retry import (
-    RetryConfig,
-    retry_with_backoff,
-    retry_llm_call,
-    DEFAULT_RETRY_CONFIG,
-    DEFAULT_RETRY_EXCEPTIONS,
-)
+import pytest
+
 from watsonx_vision.exceptions import (
     LLMConnectionError,
     LLMTimeoutError,
+)
+from watsonx_vision.retry import (
+    DEFAULT_RETRY_CONFIG,
+    DEFAULT_RETRY_EXCEPTIONS,
+    RetryConfig,
+    retry_llm_call,
+    retry_with_backoff,
 )
 
 
@@ -48,19 +48,14 @@ class TestRetryConfig:
         """Test exponential backoff calculation"""
         config = RetryConfig(base_delay=1.0, exponential_base=2.0, jitter=False)
 
-        assert config.calculate_delay(0) == 1.0   # 1 * 2^0 = 1
-        assert config.calculate_delay(1) == 2.0   # 1 * 2^1 = 2
-        assert config.calculate_delay(2) == 4.0   # 1 * 2^2 = 4
-        assert config.calculate_delay(3) == 8.0   # 1 * 2^3 = 8
+        assert config.calculate_delay(0) == 1.0  # 1 * 2^0 = 1
+        assert config.calculate_delay(1) == 2.0  # 1 * 2^1 = 2
+        assert config.calculate_delay(2) == 4.0  # 1 * 2^2 = 4
+        assert config.calculate_delay(3) == 8.0  # 1 * 2^3 = 8
 
     def test_calculate_delay_max_cap(self):
         """Test that delay is capped at max_delay"""
-        config = RetryConfig(
-            base_delay=1.0,
-            max_delay=5.0,
-            exponential_base=2.0,
-            jitter=False
-        )
+        config = RetryConfig(base_delay=1.0, max_delay=5.0, exponential_base=2.0, jitter=False)
 
         assert config.calculate_delay(0) == 1.0
         assert config.calculate_delay(1) == 2.0
@@ -106,11 +101,13 @@ class TestRetryWithBackoff:
 
     def test_retry_on_connection_error(self):
         """Test retry on connection error"""
-        mock_func = Mock(side_effect=[
-            LLMConnectionError("Connection failed"),
-            LLMConnectionError("Connection failed"),
-            "success"
-        ])
+        mock_func = Mock(
+            side_effect=[
+                LLMConnectionError("Connection failed"),
+                LLMConnectionError("Connection failed"),
+                "success",
+            ]
+        )
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -125,10 +122,7 @@ class TestRetryWithBackoff:
 
     def test_retry_on_timeout_error(self):
         """Test retry on timeout error"""
-        mock_func = Mock(side_effect=[
-            LLMTimeoutError("Timeout"),
-            "success"
-        ])
+        mock_func = Mock(side_effect=[LLMTimeoutError("Timeout"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -174,11 +168,9 @@ class TestRetryWithBackoff:
 
     def test_on_retry_callback(self):
         """Test on_retry callback is called"""
-        mock_func = Mock(side_effect=[
-            LLMConnectionError("Fail 1"),
-            LLMConnectionError("Fail 2"),
-            "success"
-        ])
+        mock_func = Mock(
+            side_effect=[LLMConnectionError("Fail 1"), LLMConnectionError("Fail 2"), "success"]
+        )
         callback = Mock()
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
@@ -218,20 +210,14 @@ class TestRetryLLMCall:
         """Test successful call without retry"""
         mock_func = Mock(return_value="success")
 
-        result = retry_llm_call(
-            mock_func,
-            config=RetryConfig(max_attempts=3, base_delay=0.01)
-        )
+        result = retry_llm_call(mock_func, config=RetryConfig(max_attempts=3, base_delay=0.01))
 
         assert result == "success"
         assert mock_func.call_count == 1
 
     def test_retry_with_args(self):
         """Test retry with positional arguments"""
-        mock_func = Mock(side_effect=[
-            LLMConnectionError("Fail"),
-            "success"
-        ])
+        mock_func = Mock(side_effect=[LLMConnectionError("Fail"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 
@@ -243,10 +229,7 @@ class TestRetryLLMCall:
 
     def test_retry_with_kwargs(self):
         """Test retry with keyword arguments"""
-        mock_func = Mock(side_effect=[
-            LLMConnectionError("Fail"),
-            "success"
-        ])
+        mock_func = Mock(side_effect=[LLMConnectionError("Fail"), "success"])
 
         config = RetryConfig(max_attempts=3, base_delay=0.01, jitter=False)
 

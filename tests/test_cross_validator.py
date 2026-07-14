@@ -1,8 +1,9 @@
 """Tests for CrossValidator module"""
 
-import pytest
 import sys
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Mock the langchain modules before importing CrossValidator
 mock_langchain_ibm = MagicMock()
@@ -11,24 +12,28 @@ mock_langchain_core_messages = MagicMock()
 mock_langchain_core_output_parsers = MagicMock()
 
 # Create mock classes
-_mock_human_message = type('HumanMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
-_mock_system_message = type('SystemMessage', (), {'__init__': lambda self, content: setattr(self, 'content', content)})
+_mock_human_message = type(
+    "HumanMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
+_mock_system_message = type(
+    "SystemMessage", (), {"__init__": lambda self, content: setattr(self, "content", content)}
+)
 
 mock_langchain_core_messages.HumanMessage = _mock_human_message
 mock_langchain_core_messages.SystemMessage = _mock_system_message
 mock_langchain_core_output_parsers.JsonOutputParser = MagicMock
 
-sys.modules['langchain_ibm'] = mock_langchain_ibm
-sys.modules['langchain_core'] = mock_langchain_core
-sys.modules['langchain_core.messages'] = mock_langchain_core_messages
-sys.modules['langchain_core.output_parsers'] = mock_langchain_core_output_parsers
+sys.modules["langchain_ibm"] = mock_langchain_ibm
+sys.modules["langchain_core"] = mock_langchain_core
+sys.modules["langchain_core.messages"] = mock_langchain_core_messages
+sys.modules["langchain_core.output_parsers"] = mock_langchain_core_output_parsers
 
 from watsonx_vision.cross_validator import (
     CrossValidator,
     FinancialCrossValidator,
-    ValidationResult,
     Inconsistency,
-    InconsistencySeverity
+    InconsistencySeverity,
+    ValidationResult,
 )
 
 
@@ -44,7 +49,7 @@ class TestInconsistency:
             source1_doc="Application",
             source2_doc="Tax Return",
             severity=InconsistencySeverity.CRITICAL,
-            explanation="SSN mismatch between documents"
+            explanation="SSN mismatch between documents",
         )
 
         assert inc.field == "ssn"
@@ -61,7 +66,7 @@ class TestInconsistency:
             source1_doc="Passport",
             source2_doc="License",
             severity=InconsistencySeverity.LOW,
-            explanation="Minor name variation"
+            explanation="Minor name variation",
         )
 
         result = inc.to_dict()
@@ -82,7 +87,7 @@ class TestInconsistency:
                 source1_doc="doc1",
                 source2_doc="doc2",
                 severity=severity,
-                explanation="test"
+                explanation="test",
             )
             assert inc.to_dict()["severity"] == severity.value
 
@@ -98,7 +103,7 @@ class TestValidationResult:
             inconsistencies=[],
             matched_fields=["name", "dob", "ssn"],
             summary="All data consistent across documents",
-            confidence=95
+            confidence=95,
         )
 
         assert result.passed is True
@@ -110,10 +115,13 @@ class TestValidationResult:
         """Test creating a failing ValidationResult"""
         inconsistencies = [
             Inconsistency(
-                "ssn", "123-45-6789", "987-65-4321",
-                "Application", "Tax Return",
+                "ssn",
+                "123-45-6789",
+                "987-65-4321",
+                "Application",
+                "Tax Return",
                 InconsistencySeverity.CRITICAL,
-                "SSN mismatch"
+                "SSN mismatch",
             )
         ]
 
@@ -123,7 +131,7 @@ class TestValidationResult:
             inconsistencies=inconsistencies,
             matched_fields=["name", "dob"],
             summary="Critical SSN inconsistency found",
-            confidence=30
+            confidence=30,
         )
 
         assert result.passed is False
@@ -135,10 +143,13 @@ class TestValidationResult:
         """Test converting ValidationResult to dictionary"""
         inconsistencies = [
             Inconsistency(
-                "address", "123 Main St", "123 Main Street",
-                "Application", "Bank Statement",
+                "address",
+                "123 Main St",
+                "123 Main Street",
+                "Application",
+                "Bank Statement",
                 InconsistencySeverity.MEDIUM,
-                "Address abbreviation difference"
+                "Address abbreviation difference",
             )
         ]
 
@@ -148,7 +159,7 @@ class TestValidationResult:
             inconsistencies=inconsistencies,
             matched_fields=["name", "ssn"],
             summary="Minor address variation",
-            confidence=85
+            confidence=85,
         )
 
         result_dict = result.to_dict()
@@ -167,7 +178,7 @@ class TestValidationResult:
             inconsistencies=[],
             matched_fields=[],
             summary="No data to compare",
-            confidence=100
+            confidence=100,
         )
 
         result_dict = result.to_dict()
@@ -177,21 +188,25 @@ class TestValidationResult:
 def create_mock_cross_validator():
     """Helper to create a mocked CrossValidator instance"""
     mock_llm = Mock()
-    mock_llm.invoke = MagicMock(return_value=Mock(
-        content='{"passed": true, "inconsistencies": [], "matched_fields": ["name", "dob"], "summary": "All consistent", "confidence": 90}'
-    ))
+    mock_llm.invoke = MagicMock(
+        return_value=Mock(
+            content='{"passed": true, "inconsistencies": [], "matched_fields": ["name", "dob"], "summary": "All consistent", "confidence": 90}'
+        )
+    )
 
     validator = CrossValidator(llm=mock_llm)
 
     # Replace the parser with a mock
     validator._parser = Mock()
-    validator._parser.parse = MagicMock(return_value={
-        "passed": True,
-        "inconsistencies": [],
-        "matched_fields": ["name", "dob"],
-        "summary": "All data consistent",
-        "confidence": 90
-    })
+    validator._parser.parse = MagicMock(
+        return_value={
+            "passed": True,
+            "inconsistencies": [],
+            "matched_fields": ["name", "dob"],
+            "summary": "All data consistent",
+            "confidence": 90,
+        }
+    )
 
     return validator
 
@@ -207,13 +222,9 @@ class TestCrossValidator:
 
     def test_validator_raises_without_langchain(self):
         """Test that CrossValidator raises ImportError without langchain-ibm"""
-        with patch('watsonx_vision.cross_validator.LANGCHAIN_AVAILABLE', False):
+        with patch("watsonx_vision.cross_validator.LANGCHAIN_AVAILABLE", False):
             with pytest.raises(ImportError) as exc_info:
-                CrossValidator(
-                    api_key="test",
-                    url="http://test",
-                    project_id="test"
-                )
+                CrossValidator(api_key="test", url="http://test", project_id="test")
             assert "langchain-ibm is required" in str(exc_info.value)
 
     def test_field_severity_mapping(self):
@@ -229,14 +240,10 @@ class TestCrossValidator:
         """Test validating consistent application and document data"""
         validator = create_mock_cross_validator()
 
-        application_data = {
-            "name": "John Doe",
-            "dob": "1990-01-15",
-            "ssn": "123-45-6789"
-        }
+        application_data = {"name": "John Doe", "dob": "1990-01-15", "ssn": "123-45-6789"}
         document_data = [
             {"doc_type": "Passport", "name": "John Doe", "dob": "1990-01-15"},
-            {"doc_type": "Tax Return", "name": "John Doe", "ssn": "123-45-6789"}
+            {"doc_type": "Tax Return", "name": "John Doe", "ssn": "123-45-6789"},
         ]
 
         result = validator.validate(application_data, document_data)
@@ -260,12 +267,12 @@ class TestCrossValidator:
                     "source1_doc": "Application",
                     "source2_doc": "Passport",
                     "severity": "high",
-                    "explanation": "Name mismatch"
+                    "explanation": "Name mismatch",
                 }
             ],
             "matched_fields": ["dob"],
             "summary": "Name inconsistency found",
-            "confidence": 40
+            "confidence": 40,
         }
 
         application_data = {"name": "John Doe", "dob": "1990-01-15"}
@@ -284,7 +291,7 @@ class TestCrossValidator:
 
         custom_fields = {
             "employee_id": InconsistencySeverity.CRITICAL,
-            "department": InconsistencySeverity.LOW
+            "department": InconsistencySeverity.LOW,
         }
 
         application_data = {"employee_id": "E123"}
@@ -302,16 +309,16 @@ class TestCrossValidator:
         packages = [
             {
                 "application_data": {"name": "John Doe"},
-                "document_data": [{"doc_type": "Passport", "name": "John Doe"}]
+                "document_data": [{"doc_type": "Passport", "name": "John Doe"}],
             },
             {
                 "application_data": {"name": "Jane Smith"},
-                "document_data": [{"doc_type": "License", "name": "Jane Smith"}]
+                "document_data": [{"doc_type": "License", "name": "Jane Smith"}],
             },
             {
                 "application_data": {"name": "Bob Johnson"},
-                "document_data": [{"doc_type": "ID", "name": "Bob Johnson"}]
-            }
+                "document_data": [{"doc_type": "ID", "name": "Bob Johnson"}],
+            },
         ]
 
         results = validator.validate_batch(packages)
@@ -328,7 +335,7 @@ class TestCrossValidator:
             {
                 "application_data": {"name": "John"},
                 "document_data": [{"name": "John"}],
-                "custom_fields": {"custom_id": InconsistencySeverity.HIGH}
+                "custom_fields": {"custom_id": InconsistencySeverity.HIGH},
             }
         ]
 
@@ -345,7 +352,7 @@ class TestCrossValidator:
             "name": "John Doe",
             "dob": "1990-01-15",
             "filename": "doc.pdf",  # Should be filtered
-            "doc_type": "Passport"  # Should be filtered
+            "doc_type": "Passport",  # Should be filtered
         }
 
         formatted = validator._format_dict(data)
@@ -369,12 +376,12 @@ class TestCrossValidator:
                     "source1_doc": "doc1",
                     "source2_doc": "doc2",
                     "severity": "invalid_severity",
-                    "explanation": "test"
+                    "explanation": "test",
                 }
             ],
             "matched_fields": [],
             "summary": "test",
-            "confidence": 50
+            "confidence": 50,
         }
 
         result = validator.validate({"test": "a"}, [{"test": "b"}])
@@ -413,7 +420,7 @@ class TestCrossValidatorReport:
             inconsistencies=[],
             matched_fields=["name", "dob", "ssn"],
             summary="All data is consistent",
-            confidence=95
+            confidence=95,
         )
 
         report = validator.generate_report(result)
@@ -429,17 +436,23 @@ class TestCrossValidatorReport:
 
         inconsistencies = [
             Inconsistency(
-                "ssn", "123-45-6789", "987-65-4321",
-                "Application", "Tax Return",
+                "ssn",
+                "123-45-6789",
+                "987-65-4321",
+                "Application",
+                "Tax Return",
                 InconsistencySeverity.CRITICAL,
-                "SSN numbers do not match"
+                "SSN numbers do not match",
             ),
             Inconsistency(
-                "name", "John Doe", "John D. Doe",
-                "Application", "License",
+                "name",
+                "John Doe",
+                "John D. Doe",
+                "Application",
+                "License",
                 InconsistencySeverity.LOW,
-                "Minor name variation"
-            )
+                "Minor name variation",
+            ),
         ]
 
         result = ValidationResult(
@@ -448,7 +461,7 @@ class TestCrossValidatorReport:
             inconsistencies=inconsistencies,
             matched_fields=["dob"],
             summary="Critical inconsistencies found",
-            confidence=30
+            confidence=30,
         )
 
         report = validator.generate_report(result)
@@ -467,10 +480,7 @@ class TestCrossValidatorReport:
 
         inconsistencies = [
             Inconsistency(
-                "name", "John", "Jane",
-                "App", "Doc",
-                InconsistencySeverity.HIGH,
-                "Mismatch"
+                "name", "John", "Jane", "App", "Doc", InconsistencySeverity.HIGH, "Mismatch"
             )
         ]
 
@@ -480,7 +490,7 @@ class TestCrossValidatorReport:
             inconsistencies=inconsistencies,
             matched_fields=[],
             summary="Issue found",
-            confidence=50
+            confidence=50,
         )
 
         report = validator.generate_report(result, include_details=False)
@@ -506,7 +516,7 @@ class TestCrossValidatorReport:
             inconsistencies=inconsistencies,
             matched_fields=[],
             summary="Multiple issues",
-            confidence=20
+            confidence=20,
         )
 
         report = validator.generate_report(result)
@@ -521,21 +531,25 @@ class TestCrossValidatorReport:
 def create_mock_financial_validator():
     """Helper to create a mocked FinancialCrossValidator instance"""
     mock_llm = Mock()
-    mock_llm.invoke = MagicMock(return_value=Mock(
-        content='{"passed": true, "inconsistencies": [], "matched_fields": ["revenue", "net_income"], "summary": "Financial data consistent", "confidence": 85}'
-    ))
+    mock_llm.invoke = MagicMock(
+        return_value=Mock(
+            content='{"passed": true, "inconsistencies": [], "matched_fields": ["revenue", "net_income"], "summary": "Financial data consistent", "confidence": 85}'
+        )
+    )
 
     validator = FinancialCrossValidator(llm=mock_llm)
 
     # Replace the parser with a mock
     validator._parser = Mock()
-    validator._parser.parse = MagicMock(return_value={
-        "passed": True,
-        "inconsistencies": [],
-        "matched_fields": ["revenue", "net_income"],
-        "summary": "Financial data consistent",
-        "confidence": 85
-    })
+    validator._parser.parse = MagicMock(
+        return_value={
+            "passed": True,
+            "inconsistencies": [],
+            "matched_fields": ["revenue", "net_income"],
+            "summary": "Financial data consistent",
+            "confidence": 85,
+        }
+    )
 
     return validator
 
@@ -566,21 +580,15 @@ class TestFinancialCrossValidator:
         """Test validating financial documents"""
         validator = create_mock_financial_validator()
 
-        tax_return_data = {
-            "doc_type": "Tax Return",
-            "revenue": 100000,
-            "net_income": 75000
-        }
+        tax_return_data = {"doc_type": "Tax Return", "revenue": 100000, "net_income": 75000}
 
         bank_statements = [
             {"doc_type": "Bank Statement", "deposits": 8500, "month": "January"},
-            {"doc_type": "Bank Statement", "deposits": 8200, "month": "February"}
+            {"doc_type": "Bank Statement", "deposits": 8200, "month": "February"},
         ]
 
         result = validator.validate_financials(
-            tax_return_data=tax_return_data,
-            bank_statements=bank_statements,
-            tolerance_percent=5.0
+            tax_return_data=tax_return_data, bank_statements=bank_statements, tolerance_percent=5.0
         )
 
         assert isinstance(result, ValidationResult)
@@ -596,13 +604,11 @@ class TestFinancialCrossValidator:
             "doc_type": "Personal Financial Statement",
             "total_assets": 200000,
             "total_liabilities": 50000,
-            "net_worth": 150000
+            "net_worth": 150000,
         }
 
         result = validator.validate_financials(
-            tax_return_data=tax_return_data,
-            bank_statements=bank_statements,
-            pfs_data=pfs_data
+            tax_return_data=tax_return_data, bank_statements=bank_statements, pfs_data=pfs_data
         )
 
         assert isinstance(result, ValidationResult)
@@ -612,9 +618,7 @@ class TestFinancialCrossValidator:
         validator = create_mock_financial_validator()
 
         result = validator.validate_financials(
-            tax_return_data={"revenue": 100000},
-            bank_statements=[{"deposits": 8500}],
-            pfs_data=None
+            tax_return_data={"revenue": 100000}, bank_statements=[{"deposits": 8500}], pfs_data=None
         )
 
         assert isinstance(result, ValidationResult)

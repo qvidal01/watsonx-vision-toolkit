@@ -1,13 +1,12 @@
-"""
-Tests for VisionLLMConfig.from_env() environment variable loading.
-"""
+"""Tests for VisionLLMConfig.from_env() environment variable loading."""
 
 import os
-import pytest
 from unittest.mock import patch
 
-from watsonx_vision.vision_llm import VisionLLMConfig, LLMProvider
+import pytest
+
 from watsonx_vision.exceptions import ConfigurationError
+from watsonx_vision.vision_llm import LLMProvider, VisionLLMConfig
 
 
 class TestConfigFromEnv:

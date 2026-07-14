@@ -1,15 +1,16 @@
 """Tests for custom exceptions module"""
 
 import pytest
+
 from watsonx_vision.exceptions import (
-    WatsonxVisionError,
-    LLMConnectionError,
-    LLMResponseError,
-    LLMParseError,
-    LLMTimeoutError,
-    DocumentAnalysisError,
-    ValidationError,
     ConfigurationError,
+    DocumentAnalysisError,
+    LLMConnectionError,
+    LLMParseError,
+    LLMResponseError,
+    LLMTimeoutError,
+    ValidationError,
+    WatsonxVisionError,
 )
 
 
@@ -48,8 +49,7 @@ class TestLLMConnectionError:
     def test_connection_error_with_details(self):
         """Test connection error with endpoint details"""
         error = LLMConnectionError(
-            "Connection refused",
-            details={"url": "https://api.example.com", "timeout": 30}
+            "Connection refused", details={"url": "https://api.example.com", "timeout": 30}
         )
         assert error.details["url"] == "https://api.example.com"
 
@@ -66,8 +66,7 @@ class TestLLMResponseError:
     def test_response_error_with_raw_content(self):
         """Test response error with raw content details"""
         error = LLMResponseError(
-            "Unexpected format",
-            details={"raw_content": "not json", "status": 200}
+            "Unexpected format", details={"raw_content": "not json", "status": 200}
         )
         assert error.details["raw_content"] == "not json"
 
@@ -83,8 +82,7 @@ class TestLLMParseError:
     def test_parse_error_with_content(self):
         """Test parse error with content that failed"""
         error = LLMParseError(
-            "Invalid JSON",
-            details={"content": "{broken json", "error": "JSONDecodeError"}
+            "Invalid JSON", details={"content": "{broken json", "error": "JSONDecodeError"}
         )
         assert "broken" in str(error.details["content"])
 
@@ -101,8 +99,7 @@ class TestLLMTimeoutError:
     def test_timeout_error_with_duration(self):
         """Test timeout error with duration details"""
         error = LLMTimeoutError(
-            "Request timed out",
-            details={"duration_ms": 30000, "max_allowed": 30000}
+            "Request timed out", details={"duration_ms": 30000, "max_allowed": 30000}
         )
         assert error.details["duration_ms"] == 30000
 
@@ -118,8 +115,7 @@ class TestDocumentAnalysisError:
     def test_analysis_error_with_filename(self):
         """Test analysis error with filename details"""
         error = DocumentAnalysisError(
-            "OCR failed",
-            details={"filename": "blurry.png", "reason": "low resolution"}
+            "OCR failed", details={"filename": "blurry.png", "reason": "low resolution"}
         )
         assert error.details["filename"] == "blurry.png"
 
@@ -135,8 +131,7 @@ class TestValidationError:
     def test_validation_error_with_fields(self):
         """Test validation error with field details"""
         error = ValidationError(
-            "Inconsistent data",
-            details={"fields": ["name", "dob"], "severity": "high"}
+            "Inconsistent data", details={"fields": ["name", "dob"], "severity": "high"}
         )
         assert "name" in error.details["fields"]
 
@@ -152,8 +147,7 @@ class TestConfigurationError:
     def test_configuration_error_with_missing_fields(self):
         """Test configuration error with missing field details"""
         error = ConfigurationError(
-            "Invalid configuration",
-            details={"missing": ["api_key", "project_id"]}
+            "Invalid configuration", details={"missing": ["api_key", "project_id"]}
         )
         assert "api_key" in error.details["missing"]
 

@@ -1,6 +1,4 @@
-"""
-Tests for the CLI module.
-"""
+"""Tests for the CLI module."""
 
 import json
 import os
@@ -11,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from watsonx_vision.cli import cli, load_image, output_result, format_pretty
+from watsonx_vision.cli import cli, format_pretty, load_image, output_result
 
 
 class TestCLIHelpers:
@@ -52,12 +50,7 @@ class TestCLIHelpers:
 
     def test_format_pretty_nested(self):
         """Test pretty formatting of nested dict."""
-        data = {
-            "person": {
-                "name": "John",
-                "address": {"city": "NYC"}
-            }
-        }
+        data = {"person": {"name": "John", "address": {"city": "NYC"}}}
         result = format_pretty(data)
 
         assert "person:" in result
@@ -101,17 +94,79 @@ class TestCLICommands:
     def sample_image(self):
         """Create a sample test image file."""
         # Create minimal valid PNG (1x1 red pixel)
-        png_data = bytes([
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,  # PNG signature
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,  # IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,  # 1x1
-            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,  # IDAT chunk
-            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xFF, 0xFF, 0x3F,
-            0x00, 0x05, 0xFE, 0x02, 0xFE, 0xDC, 0xCC, 0x59,
-            0xE7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,  # IEND chunk
-            0x44, 0xAE, 0x42, 0x60, 0x82,
-        ])
+        png_data = bytes(
+            [
+                0x89,
+                0x50,
+                0x4E,
+                0x47,
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,  # PNG signature
+                0x00,
+                0x00,
+                0x00,
+                0x0D,
+                0x49,
+                0x48,
+                0x44,
+                0x52,  # IHDR chunk
+                0x00,
+                0x00,
+                0x00,
+                0x01,
+                0x00,
+                0x00,
+                0x00,
+                0x01,  # 1x1
+                0x08,
+                0x02,
+                0x00,
+                0x00,
+                0x00,
+                0x90,
+                0x77,
+                0x53,
+                0xDE,
+                0x00,
+                0x00,
+                0x00,
+                0x0C,
+                0x49,
+                0x44,
+                0x41,  # IDAT chunk
+                0x54,
+                0x08,
+                0xD7,
+                0x63,
+                0xF8,
+                0xFF,
+                0xFF,
+                0x3F,
+                0x00,
+                0x05,
+                0xFE,
+                0x02,
+                0xFE,
+                0xDC,
+                0xCC,
+                0x59,
+                0xE7,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x49,
+                0x45,
+                0x4E,  # IEND chunk
+                0x44,
+                0xAE,
+                0x42,
+                0x60,
+                0x82,
+            ]
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             f.write(png_data)
@@ -229,17 +284,79 @@ class TestCLIWithMockedLLM:
     @pytest.fixture
     def sample_image(self):
         """Create a sample test image file."""
-        png_data = bytes([
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
-            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xFF, 0xFF, 0x3F,
-            0x00, 0x05, 0xFE, 0x02, 0xFE, 0xDC, 0xCC, 0x59,
-            0xE7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
-            0x44, 0xAE, 0x42, 0x60, 0x82,
-        ])
+        png_data = bytes(
+            [
+                0x89,
+                0x50,
+                0x4E,
+                0x47,
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
+                0x00,
+                0x00,
+                0x00,
+                0x0D,
+                0x49,
+                0x48,
+                0x44,
+                0x52,
+                0x00,
+                0x00,
+                0x00,
+                0x01,
+                0x00,
+                0x00,
+                0x00,
+                0x01,
+                0x08,
+                0x02,
+                0x00,
+                0x00,
+                0x00,
+                0x90,
+                0x77,
+                0x53,
+                0xDE,
+                0x00,
+                0x00,
+                0x00,
+                0x0C,
+                0x49,
+                0x44,
+                0x41,
+                0x54,
+                0x08,
+                0xD7,
+                0x63,
+                0xF8,
+                0xFF,
+                0xFF,
+                0x3F,
+                0x00,
+                0x05,
+                0xFE,
+                0x02,
+                0xFE,
+                0xDC,
+                0xCC,
+                0x59,
+                0xE7,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x49,
+                0x45,
+                0x4E,
+                0x44,
+                0xAE,
+                0x42,
+                0x60,
+                0x82,
+            ]
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             f.write(png_data)
@@ -277,10 +394,7 @@ class TestCLIWithMockedLLM:
     def test_extract_success(self, mock_get_llm, runner, sample_image):
         """Test successful extraction."""
         mock_llm = MagicMock()
-        mock_llm.extract_information.return_value = {
-            "name": "John Doe",
-            "dob": "1990-01-15"
-        }
+        mock_llm.extract_information.return_value = {"name": "John Doe", "dob": "1990-01-15"}
         mock_get_llm.return_value = mock_llm
 
         result = runner.invoke(cli, ["extract", sample_image])

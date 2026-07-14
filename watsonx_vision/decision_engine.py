@@ -1,5 +1,4 @@
-"""
-Decision Engine Module
+"""Decision Engine Module
 
 Multi-criteria decision engine that combines validation results
 to produce final decisions with weighted scoring.
@@ -7,17 +6,18 @@ to produce final decisions with weighted scoring.
 Extracted from IBM Watsonx Loan Preprocessing Agents project.
 """
 
-from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from enum import Enum
-from datetime import datetime, date
+from typing import Any, Callable, Dict, List, Optional
 
+from .cross_validator import InconsistencySeverity, ValidationResult
 from .fraud_detector import FraudResult, FraudSeverity
-from .cross_validator import ValidationResult, InconsistencySeverity
 
 
 class DecisionStatus(Enum):
     """Possible decision outcomes"""
+
     APPROVED = "approved"
     REJECTED = "rejected"
     PENDING_REVIEW = "pending_review"
@@ -26,8 +26,7 @@ class DecisionStatus(Enum):
 
 @dataclass
 class CriterionResult:
-    """
-    Result of evaluating a single criterion.
+    """Result of evaluating a single criterion.
 
     Attributes:
         name: Criterion name
@@ -35,7 +34,9 @@ class CriterionResult:
         score: Score for this criterion (0-100)
         weight: Weight of this criterion in final decision
         details: Additional details or explanation
+
     """
+
     name: str
     passed: bool
     score: int
@@ -49,8 +50,7 @@ class CriterionResult:
 
 @dataclass
 class Decision:
-    """
-    Final decision from the decision engine.
+    """Final decision from the decision engine.
 
     Attributes:
         status: The decision outcome (approved, rejected, etc.)
@@ -60,7 +60,9 @@ class Decision:
         recommendations: List of recommended actions
         timestamp: When the decision was made
         metadata: Additional metadata about the decision
+
     """
+
     status: DecisionStatus
     overall_score: float
     criteria_results: List[CriterionResult]
@@ -81,14 +83,14 @@ class Decision:
                     "score": cr.score,
                     "weight": cr.weight,
                     "weighted_score": round(cr.weighted_score(), 2),
-                    "details": cr.details
+                    "details": cr.details,
                 }
                 for cr in self.criteria_results
             ],
             "reasons": self.reasons,
             "recommendations": self.recommendations,
             "timestamp": self.timestamp.isoformat(),
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
     def summary(self) -> str:
@@ -97,15 +99,14 @@ class Decision:
             DecisionStatus.APPROVED: "✅",
             DecisionStatus.REJECTED: "❌",
             DecisionStatus.PENDING_REVIEW: "⏳",
-            DecisionStatus.NEEDS_MORE_INFO: "📋"
+            DecisionStatus.NEEDS_MORE_INFO: "📋",
         }.get(self.status, "❓")
 
         return f"{emoji} {self.status.value.upper()} (Score: {self.overall_score:.1f}/100)"
 
 
 class DecisionEngine:
-    """
-    Multi-criteria decision engine with weighted scoring.
+    """Multi-criteria decision engine with weighted scoring.
 
     Combines multiple validation results (fraud detection, cross-validation,
     custom criteria) into a final decision using configurable weights and thresholds.
@@ -129,6 +130,7 @@ class DecisionEngine:
         ...     custom_data={"age": 25}
         ... )
         >>> print(decision.summary())
+
     """
 
     def __init__(
@@ -137,10 +139,9 @@ class DecisionEngine:
         rejection_threshold: float = 40.0,
         fraud_weight: float = 0.4,
         cross_validation_weight: float = 0.3,
-        custom_criteria_weight: float = 0.3
+        custom_criteria_weight: float = 0.3,
     ):
-        """
-        Initialize decision engine.
+        """Initialize decision engine.
 
         Args:
             approval_threshold: Minimum score for approval (0-100)
@@ -148,6 +149,7 @@ class DecisionEngine:
             fraud_weight: Weight for fraud detection results
             cross_validation_weight: Weight for cross-validation results
             custom_criteria_weight: Weight for custom criteria (distributed among them)
+
         """
         self.approval_threshold = approval_threshold
         self.rejection_threshold = rejection_threshold
@@ -164,10 +166,9 @@ class DecisionEngine:
         weight: float,
         evaluator: Callable[[Dict], bool],
         score_on_pass: int = 100,
-        score_on_fail: int = 0
+        score_on_fail: int = 0,
     ):
-        """
-        Add a custom criterion to the decision engine.
+        """Add a custom criterion to the decision engine.
 
         Args:
             name: Unique name for this criterion
@@ -182,6 +183,7 @@ class DecisionEngine:
             ...     weight=0.5,
             ...     evaluator=lambda d: d.get("annual_income", 0) >= 50000
             ... )
+
         """
         self._custom_criteria[name] = (weight, evaluator, score_on_pass, score_on_fail)
 
@@ -195,10 +197,9 @@ class DecisionEngine:
         fraud_results: Optional[List[FraudResult]] = None,
         validation_result: Optional[ValidationResult] = None,
         custom_data: Optional[Dict[str, Any]] = None,
-        override_status: Optional[DecisionStatus] = None
+        override_status: Optional[DecisionStatus] = None,
     ) -> Decision:
-        """
-        Make a decision based on all inputs.
+        """Make a decision based on all inputs.
 
         Args:
             fraud_results: List of fraud detection results for documents
@@ -215,6 +216,7 @@ class DecisionEngine:
             ...     validation_result=cross_val_result,
             ...     custom_data={"age": 25, "annual_income": 75000}
             ... )
+
         """
         criteria_results = []
         reasons = []
@@ -250,7 +252,11 @@ class DecisionEngine:
         # Calculate overall score
         if criteria_results:
             total_weight = sum(cr.weight for cr in criteria_results)
-            overall_score = sum(cr.weighted_score() for cr in criteria_results) / total_weight if total_weight > 0 else 0
+            overall_score = (
+                sum(cr.weighted_score() for cr in criteria_results) / total_weight
+                if total_weight > 0
+                else 0
+            )
         else:
             overall_score = 0
 
@@ -279,8 +285,8 @@ class DecisionEngine:
             metadata={
                 "fraud_results_count": len(fraud_results) if fraud_results else 0,
                 "has_cross_validation": validation_result is not None,
-                "custom_criteria_count": len(self._custom_criteria)
-            }
+                "custom_criteria_count": len(self._custom_criteria),
+            },
         )
 
     def _evaluate_fraud(self, fraud_results: List[FraudResult]) -> CriterionResult:
@@ -291,7 +297,7 @@ class DecisionEngine:
                 passed=True,
                 score=100,
                 weight=self.fraud_weight,
-                details="No documents to validate"
+                details="No documents to validate",
             )
 
         valid_count = sum(1 for r in fraud_results if r.valid)
@@ -318,8 +324,9 @@ class DecisionEngine:
         # Get reasons from failed documents
         failed_docs = [r for r in fraud_results if not r.valid]
         if failed_docs:
-            details = f"{valid_count}/{total_count} documents validated. Issues: " + \
-                      ", ".join([f"{r.filename or 'Unknown'}: {r.reason[:50]}" for r in failed_docs[:3]])
+            details = f"{valid_count}/{total_count} documents validated. Issues: " + ", ".join(
+                [f"{r.filename or 'Unknown'}: {r.reason[:50]}" for r in failed_docs[:3]]
+            )
         else:
             details = f"All {total_count} documents validated as authentic"
 
@@ -328,14 +335,18 @@ class DecisionEngine:
             passed=passed,
             score=score,
             weight=self.fraud_weight,
-            details=details
+            details=details,
         )
 
     def _evaluate_cross_validation(self, result: ValidationResult) -> CriterionResult:
         """Evaluate cross-validation results"""
         # Check severity of inconsistencies
-        critical_count = sum(1 for i in result.inconsistencies if i.severity == InconsistencySeverity.CRITICAL)
-        high_count = sum(1 for i in result.inconsistencies if i.severity == InconsistencySeverity.HIGH)
+        critical_count = sum(
+            1 for i in result.inconsistencies if i.severity == InconsistencySeverity.CRITICAL
+        )
+        high_count = sum(
+            1 for i in result.inconsistencies if i.severity == InconsistencySeverity.HIGH
+        )
 
         # Calculate score based on confidence and inconsistencies
         base_score = result.confidence
@@ -353,7 +364,7 @@ class DecisionEngine:
             passed=passed,
             score=score,
             weight=self.cross_validation_weight,
-            details=details
+            details=details,
         )
 
     def _evaluate_custom_criteria(self, data: Dict) -> List[CriterionResult]:
@@ -369,38 +380,40 @@ class DecisionEngine:
                 score = score_pass if passed else score_fail
 
                 # Normalize weight to custom_criteria_weight portion
-                normalized_weight = (weight / total_custom_weight * self.custom_criteria_weight) if total_custom_weight > 0 else 0
+                normalized_weight = (
+                    (weight / total_custom_weight * self.custom_criteria_weight)
+                    if total_custom_weight > 0
+                    else 0
+                )
 
-                results.append(CriterionResult(
-                    name=name,
-                    passed=passed,
-                    score=score,
-                    weight=normalized_weight,
-                    details=f"{'Passed' if passed else 'Failed'}"
-                ))
+                results.append(
+                    CriterionResult(
+                        name=name,
+                        passed=passed,
+                        score=score,
+                        weight=normalized_weight,
+                        details=f"{'Passed' if passed else 'Failed'}",
+                    )
+                )
             except Exception as e:
-                results.append(CriterionResult(
-                    name=name,
-                    passed=False,
-                    score=0,
-                    weight=weight,
-                    details=f"Error evaluating criterion: {str(e)}"
-                ))
+                results.append(
+                    CriterionResult(
+                        name=name,
+                        passed=False,
+                        score=0,
+                        weight=weight,
+                        details=f"Error evaluating criterion: {str(e)}",
+                    )
+                )
 
         return results
 
     def _determine_status(
-        self,
-        overall_score: float,
-        criteria_results: List[CriterionResult]
+        self, overall_score: float, criteria_results: List[CriterionResult]
     ) -> DecisionStatus:
         """Determine final status based on score and criteria"""
-
         # Check for any critical failures
-        has_critical_failure = any(
-            not cr.passed and cr.score < 20
-            for cr in criteria_results
-        )
+        has_critical_failure = any(not cr.passed and cr.score < 20 for cr in criteria_results)
 
         if has_critical_failure:
             return DecisionStatus.REJECTED
@@ -417,8 +430,7 @@ class DecisionEngine:
 
 
 class LoanDecisionEngine(DecisionEngine):
-    """
-    Specialized decision engine for loan applications.
+    """Specialized decision engine for loan applications.
 
     Pre-configured with common loan criteria:
     - Age verification (18+)
@@ -432,16 +444,16 @@ class LoanDecisionEngine(DecisionEngine):
         min_age: int = 18,
         min_income: float = 0,
         max_dti: float = 0.43,  # Standard DTI threshold
-        **kwargs
+        **kwargs,
     ):
-        """
-        Initialize loan decision engine.
+        """Initialize loan decision engine.
 
         Args:
             min_age: Minimum applicant age
             min_income: Minimum annual income required
             max_dti: Maximum debt-to-income ratio allowed
             **kwargs: Additional arguments for parent DecisionEngine
+
         """
         super().__init__(**kwargs)
 
@@ -455,7 +467,7 @@ class LoanDecisionEngine(DecisionEngine):
             weight=0.2,
             evaluator=self._check_age,
             score_on_pass=100,
-            score_on_fail=0
+            score_on_fail=0,
         )
 
         if min_income > 0:
@@ -464,15 +476,11 @@ class LoanDecisionEngine(DecisionEngine):
                 weight=0.3,
                 evaluator=self._check_income,
                 score_on_pass=100,
-                score_on_fail=0
+                score_on_fail=0,
             )
 
         self.add_criterion(
-            "dti_ratio",
-            weight=0.3,
-            evaluator=self._check_dti,
-            score_on_pass=100,
-            score_on_fail=30
+            "dti_ratio", weight=0.3, evaluator=self._check_dti, score_on_pass=100, score_on_fail=30
         )
 
     def _check_age(self, data: Dict) -> bool:
@@ -501,8 +509,10 @@ class LoanDecisionEngine(DecisionEngine):
                         return True
 
                     today = date.today()
-                    age = today.year - dob_date.year - (
-                        (today.month, today.day) < (dob_date.month, dob_date.day)
+                    age = (
+                        today.year
+                        - dob_date.year
+                        - ((today.month, today.day) < (dob_date.month, dob_date.day))
                     )
                 except Exception:
                     return True  # Error parsing, assume valid
@@ -515,10 +525,7 @@ class LoanDecisionEngine(DecisionEngine):
     def _check_income(self, data: Dict) -> bool:
         """Check if applicant meets income requirement"""
         income = (
-            data.get("annual_income") or
-            data.get("gross_income") or
-            data.get("yearly_income") or
-            0
+            data.get("annual_income") or data.get("gross_income") or data.get("yearly_income") or 0
         )
 
         # Convert monthly to annual if needed
@@ -547,5 +554,5 @@ class LoanDecisionEngine(DecisionEngine):
     def calculate_dti(self, monthly_debt: float, monthly_income: float) -> float:
         """Helper to calculate DTI ratio"""
         if monthly_income <= 0:
-            return float('inf')
+            return float("inf")
         return monthly_debt / monthly_income

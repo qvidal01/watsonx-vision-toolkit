@@ -1,5 +1,4 @@
-"""
-Watsonx Vision Toolkit CLI
+"""Watsonx Vision Toolkit CLI
 
 Command-line interface for document analysis, fraud detection, and validation.
 
@@ -22,10 +21,10 @@ except ImportError:
     print("CLI requires click package. Install with: pip install click")
     sys.exit(1)
 
-from .vision_llm import VisionLLM, VisionLLMConfig, LLMProvider
-from .fraud_detector import FraudDetector
 from .cache import CacheConfig
 from .exceptions import WatsonxVisionError
+from .fraud_detector import FraudDetector
+from .vision_llm import LLMProvider, VisionLLM, VisionLLMConfig
 
 
 def get_llm(
@@ -66,10 +65,9 @@ def load_image(image_path: str) -> str:
     if not path.exists():
         raise click.ClickException(f"Image file not found: {image_path}")
 
-    if not path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+    if path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
         raise click.ClickException(
-            f"Unsupported image format: {path.suffix}. "
-            "Supported: .png, .jpg, .jpeg, .gif, .webp"
+            f"Unsupported image format: {path.suffix}. Supported: .png, .jpg, .jpeg, .gif, .webp"
         )
 
     return VisionLLM.encode_image_to_base64(str(path))
@@ -115,37 +113,26 @@ def format_pretty(data: dict, indent: int = 0) -> str:
 
 # Common options
 provider_option = click.option(
-    "--provider", "-p",
+    "--provider",
+    "-p",
     type=click.Choice(["watsonx", "ollama", "openai", "anthropic"]),
-    help="LLM provider (default: from env or watsonx)"
+    help="LLM provider (default: from env or watsonx)",
 )
-model_option = click.option(
-    "--model", "-m",
-    help="Model ID to use"
-)
-url_option = click.option(
-    "--url", "-u",
-    help="Provider URL"
-)
+model_option = click.option("--model", "-m", help="Model ID to use")
+url_option = click.option("--url", "-u", help="Provider URL")
 output_option = click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Choice(["json", "pretty", "raw"]),
     default="pretty",
-    help="Output format (default: pretty)"
+    help="Output format (default: pretty)",
 )
 output_file_option = click.option(
-    "--output-file", "-f",
-    help="Write output to file instead of stdout"
+    "--output-file", "-f", help="Write output to file instead of stdout"
 )
-cache_option = click.option(
-    "--cache/--no-cache",
-    default=False,
-    help="Enable response caching"
-)
+cache_option = click.option("--cache/--no-cache", default=False, help="Enable response caching")
 cache_ttl_option = click.option(
-    "--cache-ttl",
-    default=3600.0,
-    help="Cache TTL in seconds (default: 3600)"
+    "--cache-ttl", default=3600.0, help="Cache TTL in seconds (default: 3600)"
 )
 
 
@@ -153,6 +140,7 @@ def get_version():
     """Get package version."""
     try:
         from importlib.metadata import version
+
         return version("watsonx-vision-toolkit")
     except Exception:
         # Fallback for development
@@ -180,9 +168,7 @@ def cli():
 @cli.command()
 @click.argument("image", type=click.Path(exists=True))
 @click.option(
-    "--types", "-t",
-    multiple=True,
-    help="Document types to classify (can specify multiple)"
+    "--types", "-t", multiple=True, help="Document types to classify (can specify multiple)"
 )
 @provider_option
 @model_option
@@ -227,15 +213,9 @@ def classify(
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True))
+@click.option("--fields", "-F", multiple=True, help="Fields to extract (can specify multiple)")
 @click.option(
-    "--fields", "-F",
-    multiple=True,
-    help="Fields to extract (can specify multiple)"
-)
-@click.option(
-    "--date-format",
-    default="YYYY-MM-DD",
-    help="Date format for extraction (default: YYYY-MM-DD)"
+    "--date-format", default="YYYY-MM-DD", help="Date format for extraction (default: YYYY-MM-DD)"
 )
 @provider_option
 @model_option
@@ -269,11 +249,7 @@ def extract(
         image_data = load_image(image)
 
         field_list = list(fields) if fields else None
-        result = llm.extract_information(
-            image_data,
-            fields=field_list,
-            date_format=date_format
-        )
+        result = llm.extract_information(image_data, fields=field_list, date_format=date_format)
 
         output_result(result, output, output_file)
 
@@ -335,15 +311,9 @@ def validate(
 
 @cli.command()
 @click.argument("images", type=click.Path(exists=True), nargs=-1, required=True)
+@click.option("--doc-type", help="Document type for specialized detection")
 @click.option(
-    "--doc-type",
-    help="Document type for specialized detection"
-)
-@click.option(
-    "--threshold",
-    default=0.7,
-    type=float,
-    help="Fraud detection threshold (0.0-1.0, default: 0.7)"
+    "--threshold", default=0.7, type=float, help="Fraud detection threshold (0.0-1.0, default: 0.7)"
 )
 @provider_option
 @model_option
@@ -411,24 +381,28 @@ def fraud(
             documents = []
             for img_path in images:
                 image_data = load_image(img_path)
-                documents.append({
-                    "image_data": image_data,
-                    "filename": Path(img_path).name,
-                    "document_type": doc_type,
-                })
+                documents.append(
+                    {
+                        "image_data": image_data,
+                        "filename": Path(img_path).name,
+                        "document_type": doc_type,
+                    }
+                )
 
             results = detector.validate_batch(documents)
 
             # Convert to list of dicts
             results_list = []
             for r in results:
-                results_list.append({
-                    "filename": r.filename,
-                    "is_valid": r.is_valid,
-                    "confidence": r.confidence,
-                    "severity": r.severity.value,
-                    "issues": r.issues,
-                })
+                results_list.append(
+                    {
+                        "filename": r.filename,
+                        "is_valid": r.is_valid,
+                        "confidence": r.confidence,
+                        "severity": r.severity.value,
+                        "issues": r.issues,
+                    }
+                )
 
             if output == "pretty":
                 click.echo(f"\nBatch Results ({len(results)} documents):\n")
@@ -448,15 +422,8 @@ def fraud(
 @cli.command()
 @click.argument("image", type=click.Path(exists=True))
 @click.argument("prompt")
-@click.option(
-    "--system", "-s",
-    help="System prompt for context"
-)
-@click.option(
-    "--raw/--json",
-    default=False,
-    help="Return raw text instead of parsing as JSON"
-)
+@click.option("--system", "-s", help="System prompt for context")
+@click.option("--raw/--json", default=False, help="Return raw text instead of parsing as JSON")
 @provider_option
 @model_option
 @url_option
@@ -538,7 +505,7 @@ def config(show: bool, validate_config: bool, env: bool):
             ("VISION_CACHE_TTL", "Cache TTL"),
         ]
 
-        for var, desc in env_vars:
+        for var, _desc in env_vars:
             value = os.environ.get(var)
             if value:
                 # Mask sensitive values

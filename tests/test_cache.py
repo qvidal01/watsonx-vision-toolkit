@@ -1,14 +1,10 @@
-"""
-Tests for response caching functionality.
-"""
+"""Tests for response caching functionality."""
 
 import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from watsonx_vision.cache import (
     CacheConfig,
@@ -440,11 +436,15 @@ class TestVisionLLMCacheIntegration:
         from watsonx_vision.cache import CacheConfig
 
         # Test environment loading
-        with patch.dict(os.environ, {
-            "VISION_CACHE_ENABLED": "true",
-            "VISION_CACHE_TTL": "3600",
-            "VISION_CACHE_MAX_SIZE": "500",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "VISION_CACHE_ENABLED": "true",
+                "VISION_CACHE_TTL": "3600",
+                "VISION_CACHE_MAX_SIZE": "500",
+            },
+            clear=True,
+        ):
             config = CacheConfig.from_env()
 
         assert config.enabled is True

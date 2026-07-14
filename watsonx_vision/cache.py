@@ -1,5 +1,4 @@
-"""
-Response Cache Module
+"""Response Cache Module
 
 Provides caching for LLM responses to reduce API calls and improve performance.
 Supports in-memory caching with TTL and size limits.
@@ -14,7 +13,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +42,7 @@ class CacheConfig:
 
     @classmethod
     def from_env(cls, prefix: str = "") -> "CacheConfig":
-        """
-        Create cache configuration from environment variables.
+        """Create cache configuration from environment variables.
 
         Environment variables:
             - {PREFIX}VISION_CACHE_ENABLED: Enable/disable cache (default: true)
@@ -58,6 +56,7 @@ class CacheConfig:
 
         Returns:
             CacheConfig instance
+
         """
 
         def get_env(*keys: str, default: Optional[str] = None) -> Optional[str]:
@@ -123,8 +122,7 @@ class CacheEntry:
 
 
 class ResponseCache:
-    """
-    LRU cache for LLM responses with TTL support.
+    """LRU cache for LLM responses with TTL support.
 
     Provides caching to reduce redundant LLM API calls for identical inputs.
     Useful when processing the same documents multiple times or during development.
@@ -139,14 +137,15 @@ class ResponseCache:
         >>> config = VisionLLMConfig(...)
         >>> cache_config = CacheConfig(ttl=1800)
         >>> llm = VisionLLM(config, cache_config=cache_config)
+
     """
 
     def __init__(self, config: Optional[CacheConfig] = None):
-        """
-        Initialize response cache.
+        """Initialize response cache.
 
         Args:
             config: Cache configuration. If None, uses defaults.
+
         """
         self.config = config or CacheConfig()
         self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
@@ -164,8 +163,7 @@ class ResponseCache:
         system_prompt: Optional[str] = None,
         **kwargs: Any,
     ) -> str:
-        """
-        Generate a cache key from inputs.
+        """Generate a cache key from inputs.
 
         Args:
             image_data: Base64-encoded image data
@@ -175,6 +173,7 @@ class ResponseCache:
 
         Returns:
             SHA256 hash of the combined inputs
+
         """
         key_parts = []
 
@@ -202,8 +201,7 @@ class ResponseCache:
         key: str,
         default: Optional[Any] = None,
     ) -> Optional[Any]:
-        """
-        Get a value from cache.
+        """Get a value from cache.
 
         Args:
             key: Cache key
@@ -211,6 +209,7 @@ class ResponseCache:
 
         Returns:
             Cached value or default
+
         """
         if not self.config.enabled:
             return default
@@ -242,12 +241,12 @@ class ResponseCache:
         key: str,
         value: Any,
     ) -> None:
-        """
-        Set a value in cache.
+        """Set a value in cache.
 
         Args:
             key: Cache key
             value: Value to cache
+
         """
         if not self.config.enabled:
             return
@@ -272,8 +271,7 @@ class ResponseCache:
         key: str,
         factory: callable,
     ) -> Any:
-        """
-        Get from cache or compute and store.
+        """Get from cache or compute and store.
 
         Args:
             key: Cache key
@@ -281,6 +279,7 @@ class ResponseCache:
 
         Returns:
             Cached or computed value
+
         """
         result = self.get(key)
         if result is not None:
@@ -291,14 +290,14 @@ class ResponseCache:
         return value
 
     def invalidate(self, key: str) -> bool:
-        """
-        Remove a specific entry from cache.
+        """Remove a specific entry from cache.
 
         Args:
             key: Cache key to invalidate
 
         Returns:
             True if entry was found and removed
+
         """
         with self._lock:
             if key in self._cache:
@@ -308,11 +307,11 @@ class ResponseCache:
             return False
 
     def clear(self) -> int:
-        """
-        Clear all cache entries.
+        """Clear all cache entries.
 
         Returns:
             Number of entries cleared
+
         """
         with self._lock:
             count = len(self._cache)

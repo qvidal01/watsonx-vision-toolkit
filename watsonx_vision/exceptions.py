@@ -1,11 +1,10 @@
-"""
-Custom Exceptions for Watsonx Vision Toolkit
+"""Custom Exceptions for Watsonx Vision Toolkit
 
 Provides specific exception types for different error scenarios
 to enable proper error handling and debugging.
 """
 
-from typing import Optional, Any
+from typing import Any, Optional
 
 
 class WatsonxVisionError(Exception):
@@ -24,34 +23,41 @@ class WatsonxVisionError(Exception):
 
 class LLMConnectionError(WatsonxVisionError):
     """Raised when connection to the LLM provider fails"""
+
     pass
 
 
 class LLMResponseError(WatsonxVisionError):
     """Raised when LLM returns an invalid or unexpected response"""
+
     pass
 
 
 class LLMParseError(WatsonxVisionError):
     """Raised when parsing LLM response fails (e.g., invalid JSON)"""
+
     pass
 
 
 class LLMTimeoutError(WatsonxVisionError):
     """Raised when LLM request times out"""
+
     pass
 
 
 class DocumentAnalysisError(WatsonxVisionError):
     """Raised when document analysis fails"""
+
     pass
 
 
 class ValidationError(WatsonxVisionError):
     """Raised when validation logic encounters an error"""
+
     pass
 
 
 class ConfigurationError(WatsonxVisionError):
     """Raised when configuration is invalid or incomplete"""
+
     pass

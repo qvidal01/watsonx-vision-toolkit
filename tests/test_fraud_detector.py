@@ -1,12 +1,14 @@
 """Tests for FraudDetector module"""
 
+from unittest.mock import MagicMock, Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock
+
 from watsonx_vision.fraud_detector import (
     FraudDetector,
     FraudResult,
     FraudSeverity,
-    SpecializedFraudDetector
+    SpecializedFraudDetector,
 )
 
 
@@ -23,7 +25,7 @@ class TestFraudResult:
             field_score=80,
             forgery_signs=[],
             severity=FraudSeverity.NONE,
-            filename="passport.png"
+            filename="passport.png",
         )
 
         assert result.valid is True
@@ -41,7 +43,7 @@ class TestFraudResult:
             field_score=30,
             forgery_signs=["Photo manipulation", "Font mismatch"],
             severity=FraudSeverity.HIGH,
-            filename="fake_id.png"
+            filename="fake_id.png",
         )
 
         result_dict = result.to_dict()
@@ -59,22 +61,21 @@ class TestFraudDetector:
     def mock_vision_llm(self):
         """Create a mock VisionLLM"""
         mock = Mock()
-        mock.validate_authenticity = MagicMock(return_value={
-            "valid": True,
-            "reason": "Document appears authentic",
-            "layout_score": 95,
-            "field_score": 95,  # Confidence (95+95)/2 = 95 >= 90 for NONE severity
-            "forgery_signs": []
-        })
+        mock.validate_authenticity = MagicMock(
+            return_value={
+                "valid": True,
+                "reason": "Document appears authentic",
+                "layout_score": 95,
+                "field_score": 95,  # Confidence (95+95)/2 = 95 >= 90 for NONE severity
+                "forgery_signs": [],
+            }
+        )
         return mock
 
     def test_detector_initialization(self, mock_vision_llm):
         """Test initializing FraudDetector"""
         detector = FraudDetector(
-            vision_llm=mock_vision_llm,
-            layout_threshold=70,
-            field_threshold=70,
-            min_confidence=60
+            vision_llm=mock_vision_llm, layout_threshold=70, field_threshold=70, min_confidence=60
         )
 
         assert detector.layout_threshold == 70
@@ -86,8 +87,7 @@ class TestFraudDetector:
         detector = FraudDetector(mock_vision_llm)
 
         result = detector.validate_document(
-            image_data="base64_encoded_image",
-            filename="passport.png"
+            image_data="base64_encoded_image", filename="passport.png"
         )
 
         assert result.valid is True
@@ -102,13 +102,12 @@ class TestFraudDetector:
             "reason": "SAMPLE watermark detected",
             "layout_score": 30,
             "field_score": 40,
-            "forgery_signs": ["SAMPLE watermark", "Low resolution"]
+            "forgery_signs": ["SAMPLE watermark", "Low resolution"],
         }
 
         detector = FraudDetector(mock_vision_llm)
         result = detector.validate_document(
-            image_data="base64_encoded_image",
-            filename="fake_passport.png"
+            image_data="base64_encoded_image", filename="fake_passport.png"
         )
 
         assert result.valid is False
@@ -122,7 +121,7 @@ class TestFraudDetector:
         documents = [
             {"image_data": "img1", "filename": "doc1.png"},
             {"image_data": "img2", "filename": "doc2.png"},
-            {"image_data": "img3", "filename": "doc3.png"}
+            {"image_data": "img3", "filename": "doc3.png"},
         ]
 
         results = detector.validate_batch(documents)
@@ -181,20 +180,24 @@ class TestSpecializedFraudDetector:
     def mock_vision_llm(self):
         """Create a mock VisionLLM"""
         mock = Mock()
-        mock.validate_authenticity = MagicMock(return_value={
-            "valid": True,
-            "reason": "OK",
-            "layout_score": 85,
-            "field_score": 80,
-            "forgery_signs": []
-        })
-        mock.analyze_image = MagicMock(return_value={
-            "valid": True,
-            "reason": "Tax return appears legitimate",
-            "layout_score": 90,
-            "field_score": 85,
-            "forgery_signs": []
-        })
+        mock.validate_authenticity = MagicMock(
+            return_value={
+                "valid": True,
+                "reason": "OK",
+                "layout_score": 85,
+                "field_score": 80,
+                "forgery_signs": [],
+            }
+        )
+        mock.analyze_image = MagicMock(
+            return_value={
+                "valid": True,
+                "reason": "Tax return appears legitimate",
+                "layout_score": 90,
+                "field_score": 85,
+                "forgery_signs": [],
+            }
+        )
         return mock
 
     def test_specialized_detector_initialization(self, mock_vision_llm):
@@ -210,9 +213,7 @@ class TestSpecializedFraudDetector:
         detector = SpecializedFraudDetector(mock_vision_llm)
 
         result = detector.validate_document(
-            image_data="base64_image",
-            filename="tax_return_2023.pdf",
-            document_type="tax_return"
+            image_data="base64_image", filename="tax_return_2023.pdf", document_type="tax_return"
         )
 
         assert isinstance(result, FraudResult)
