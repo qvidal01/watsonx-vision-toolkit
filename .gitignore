@@ -49,3 +49,6 @@ logs/
 
 # Documentation build
 site/
+
+# AI Task Tracking
+.ai-tasks/
