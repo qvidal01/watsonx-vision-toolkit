@@ -11,7 +11,7 @@ Project reference for `watsonx-vision-toolkit`.
 | Server | Purpose |
 |--------|---------|
 | `docker` | Docker container management — use for building, deploying, and monitoring containers |
-| `graphiti` | Knowledge graph / memory on AI server (192.168.0.234) |
+| `graphiti` | Knowledge graph / memory on the AI server |
 
 ### Agents & Skills
 
